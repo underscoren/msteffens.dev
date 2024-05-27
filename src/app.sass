@@ -1,0 +1,54 @@
+
+// fonts
+@import "./style/fonts"
+
+// font stacks
+$family-title: "Lato", "Helvetica", "Arial", "Ubuntu", sans-serif
+$family-sans-serif: "Inter", "Helvetica", "Arial", "Ubuntu", sans-serif
+$family-monospace: "mononoki", "Inconsolata", "Roboto Mono", "Consolas", monospace
+
+// colors
+@import "./style/colors"
+
+
+// bulma
+
+// color palette
+$primary: $blue
+$info: $brown
+// $success: $green
+// $warning: $yellow
+$danger: $red
+// $light: $white-ter
+// $dark: $grey-darker
+
+.pixellated
+    image-rendering: optimizeSpeed
+    image-rendering: -moz-crisp-edges
+    image-rendering: -o-crisp-edges
+    image-rendering: -webkit-optimize-contrast
+    image-rendering: pixelated
+    image-rendering: optimize-contrast
+    -ms-interpolation-mode: nearest-neighbor
+
+.fullscreen
+    width: 100vw
+    height: 33vw
+
+.flex-centered
+    display: flex
+    flex-direction: column
+    justify-content: center
+    align-items: center
+
+$title-family: $family-title
+
+@import "../node_modules/bulma/sass/utilities"
+@import "../node_modules/bulma/sass/base"
+@import "../node_modules/bulma/sass/themes"
+
+@import "../node_modules/bulma/sass/elements"
+@import "../node_modules/bulma/sass/components/navbar"
+@import "../node_modules/bulma/sass/layout/section"
+@import "../node_modules/bulma/sass/layout/container"
+

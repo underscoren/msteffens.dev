@@ -1,0 +1,32 @@
+name: Build and deploy
+
+on:
+    push:
+        branches: [master, main]
+
+    workflow_dispatch:
+
+jobs:
+    build-and-deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout the repo
+              uses: actions/checkout@v2
+
+            - name: Build docker image
+              run: docker build . --tag msteffens.dev:latest
+
+            - name: Setup SSH
+              uses: webfactory/ssh-agent@v0.7.0
+              with:
+                  ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+            - name: Stop container on server
+              run: ssh ${{ secrets.SERVER_SSH_USER }}@${{ secrets.SERVER_SSH_ADDRESS }} cd ${{ secrets.SERVER_COMPOSE_PATH }}; docker compose down
+
+            - name: Send image to server directly
+              run: docker save msteffens.dev | bzip2 | ssh ${{ secrets.SERVER_SSH_USER }}@${{ secrets.SERVER_SSH_ADDRESS }} docker load
+
+            - name: Stop container on server
+              run: ssh ${{ secrets.SERVER_SSH_USER }}@${{ secrets.SERVER_SSH_ADDRESS }} cd ${{ secrets.SERVER_COMPOSE_PATH }}; docker compose up -d

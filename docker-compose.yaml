@@ -1,0 +1,9 @@
+services:
+    msteffens.dev:
+        container_name: msteffens.dev
+        image: msteffens.dev:latest
+        ports:
+            - 14632:14632
+        environment:
+            - PORT=14632
+            # For other sveltekit server config env vars, see https://kit.svelte.dev/docs/adapter-node#environment-variables
