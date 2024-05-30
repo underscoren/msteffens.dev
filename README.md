@@ -2,6 +2,8 @@
 
 My personal site.
 
+Blog section heavily inspired by [josh-collinsworth/sveltekit-blog-starter](https://github.com/josh-collinsworth/sveltekit-blog-starter)
+
 Stack:
 
 -   Tooling: Vite
@@ -49,7 +51,7 @@ Then, you can run
 node build
 ```
 
-To run the built sveltekit server.
+To run the built sveltekit web server.
 
 However, I use Docker to build an image, then upload that directly to my server.
 I prefer to use docker compose files to manage my containers. This is a personal site, so uploading to dockerhub seems dumb. The next best step is hosting your own registry, which also seems dumb for just a single image. The last rung seems to be just sending the image over ssh to the server, which is why my build & deploy looks like:

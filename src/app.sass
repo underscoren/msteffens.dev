@@ -10,7 +10,6 @@ $family-monospace: "mononoki", "Inconsolata", "Roboto Mono", "Consolas", monospa
 // colors
 @import "./style/colors"
 
-
 // bulma
 
 // color palette
@@ -22,6 +21,27 @@ $danger: $red
 // $light: $white-ter
 // $dark: $grey-darker
 
+$title-family: $family-title
+
+@import "../node_modules/bulma/sass/utilities"
+@import "../node_modules/bulma/sass/base"
+@import "../node_modules/bulma/sass/themes"
+
+@import "../node_modules/bulma/sass/elements"
+@import "../node_modules/bulma/sass/components/navbar"
+@import "../node_modules/bulma/sass/layout/section"
+@import "../node_modules/bulma/sass/layout/container"
+@import "../node_modules/bulma/sass/layout/footer"
+@import "../node_modules/bulma/sass/grid/columns"
+
+// global styles
+body
+    display: flex
+    flex-direction: column
+    height: 1px // needed so that min-height actually gets applied
+    min-height: 100vh
+
+// global classes
 .pixellated
     image-rendering: optimizeSpeed
     image-rendering: -moz-crisp-edges
@@ -33,7 +53,8 @@ $danger: $red
 
 .fullscreen
     width: 100vw
-    height: 33vw
+    height: 100%
+    flex-grow: 1
 
 .flex-centered
     display: flex
@@ -41,14 +62,5 @@ $danger: $red
     justify-content: center
     align-items: center
 
-$title-family: $family-title
-
-@import "../node_modules/bulma/sass/utilities"
-@import "../node_modules/bulma/sass/base"
-@import "../node_modules/bulma/sass/themes"
-
-@import "../node_modules/bulma/sass/elements"
-@import "../node_modules/bulma/sass/components/navbar"
-@import "../node_modules/bulma/sass/layout/section"
-@import "../node_modules/bulma/sass/layout/container"
-
+.is-text-monospace
+    font-family: $family-monospace

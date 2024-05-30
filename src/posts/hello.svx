@@ -1,0 +1,20 @@
+---
+title: "hello"
+subhead: "test post"
+created: "2024-05-29"
+edited: "2024-05-29"
+cover: "https://bulma.io/assets/images/placeholders/128x128.png"
+alt: "test image"
+coverWidth: "128px"
+coverHeight: "128px"
+---
+
+# hello
+
+hello from hello.svx
+
+<script>
+    import Hello from "$lib/Hello.svelte"
+</script>
+
+<Hello />
