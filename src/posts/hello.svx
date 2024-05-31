@@ -13,6 +13,8 @@ coverHeight: "128px"
 
 hello from hello.svx
 
+test
+
 <script>
     import Hello from "$lib/Hello.svelte"
 </script>
