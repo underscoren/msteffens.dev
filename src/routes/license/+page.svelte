@@ -1,5 +1,5 @@
 <svelte:head>
-    <title>msteffens.dev - License</title>
+    <title>License | msteffens.dev</title>
 </svelte:head>
 
 <section class="section">

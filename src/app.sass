@@ -29,10 +29,13 @@ $title-family: $family-title
 
 @import "../node_modules/bulma/sass/elements"
 @import "../node_modules/bulma/sass/components/navbar"
+@import "../node_modules/bulma/sass/components/message"
 @import "../node_modules/bulma/sass/layout/section"
 @import "../node_modules/bulma/sass/layout/container"
 @import "../node_modules/bulma/sass/layout/footer"
 @import "../node_modules/bulma/sass/grid/columns"
+
+@import "../node_modules/bulma/sass/helpers/color"
 
 // global styles
 body
@@ -64,3 +67,9 @@ body
 
 .is-text-monospace
     font-family: $family-monospace
+
+
+// fix for awkward nested list margins
+
+ul > li:last-child
+    margin-bottom: 1rem

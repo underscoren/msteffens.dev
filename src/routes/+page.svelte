@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-    <title>msteffens.dev - Home</title>
+    <title>Home | msteffens.dev</title>
 </svelte:head>
 
 <section class="section">
