@@ -3,6 +3,8 @@
         "bitshift",
         "Bitshifts",
         "Deinterleave",
+        "deinterleaved",
+        "Deinterleaving",
         "flexbox",
         "ints"
     ]

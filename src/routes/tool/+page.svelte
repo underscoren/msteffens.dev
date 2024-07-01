@@ -5,7 +5,6 @@
     
     <meta property="og:title" content="Tools" />
     <meta property="og:description" content="Various tools and utilities">
-    <meta property="og:author" content="_n" />
 
     <meta property="og:url" content={`https://msteffens.dev/tool`} />
 

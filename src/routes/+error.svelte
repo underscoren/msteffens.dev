@@ -4,7 +4,7 @@
 
 </script>
 
-<section class="section">
+<section class="section" style="height: 100%">
     <div class="container content">
         <h1 class="title">Error {$page.status}</h1>
         <p>{$page.error?.message}</p>

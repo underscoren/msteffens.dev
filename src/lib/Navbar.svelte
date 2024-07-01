@@ -27,6 +27,7 @@
             <a class="navbar-item" href="/">Home</a>
             <a class="navbar-item" href="/tool">Tools</a>
             <a class="navbar-item" href="/blog">Blog</a>
+            <a class="navbar-item" href="/privacy">Privacy</a>
         </div>
     </div>
 </nav>

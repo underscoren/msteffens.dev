@@ -1,5 +1,7 @@
 # msteffens.dev
 
+[![wakatime](https://wakatime.com/badge/user/11612492-942b-4434-89a1-5e31d943fa36/project/8517c440-f314-4c78-8f6e-6493f3e2a2c7.svg)](https://wakatime.com/badge/user/11612492-942b-4434-89a1-5e31d943fa36/project/8517c440-f314-4c78-8f6e-6493f3e2a2c7)
+
 My personal site.
 
 Blog section heavily inspired by [josh-collinsworth/sveltekit-blog-starter](https://github.com/josh-collinsworth/sveltekit-blog-starter)

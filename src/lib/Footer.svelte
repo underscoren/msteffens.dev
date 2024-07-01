@@ -1,9 +1,7 @@
 <script lang="ts">
     import { page } from "$app/stores";
 
-    let url: string;
     $: url = `https://github.com/underscoren/msteffens.dev/blob/master/src/routes${$page.url.pathname == "/" ? "" : $page.url.pathname}/+page.svelte`;
-    let blogpostUrl: string;
     $: blogpostUrl = `https://github.com/underscoren/msteffens.dev/blob/master/src/posts/${$page.params.slug}.svx`;
 </script>
 
@@ -23,6 +21,10 @@
             {:else}
                 You can check out the source for this page <a href={url}>here</a>.
             {/if}
+        </p>
+        <p>
+            I use self-hosted <a href="https://plausible.io">Plausible</a> for privacy-focused analytics.<br/>
+            No cookies or data are stored, no personal information is tracked, all data is in aggregate. See <a href="/privacy">privacy</a> for more details.
         </p>
     </div>
 </footer>

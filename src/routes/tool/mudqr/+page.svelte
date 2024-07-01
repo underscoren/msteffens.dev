@@ -1,9 +1,10 @@
 <script lang="ts">
+    import { browser } from "$app/environment";
     import QR from "$lib/qr/QR.svelte";
     import { allPatterns, codewordGroups, combineMask, getModule, getPatternMask, maskFormulae, type BlockCharacter } from "$lib/qr/qrUtils";
     import { toByte } from "$lib/util";
 
-    let qrText = new URLSearchParams(window.location.search).get("qr") ?? "";
+    let qrText = browser ? new URLSearchParams(window.location.search).get("qr") ?? "" : "";
 
     // sanity checks
     
@@ -178,12 +179,20 @@
         length = parseInt(encodedData.slice(4,12), 2);
 
         if(encoding != 4)
-            qrError = "Encoding "+encoding.toString(2).padStart(4,"0")+" not supported";
+            return "Encoding "+encoding.toString(2).padStart(4,"0")+" not supported";
         else
             decoded = [...encodedData.slice(12, 12+length*8).matchAll(/.{1,8}/g)]
                 .map(bits => parseInt(bits as unknown as string, 2))
                 .map(num => String.fromCharCode(num))
                 .join("");
+
+        return "";
+    }
+
+    const updateURL = () => {
+        const searchParams = new URLSearchParams(window.location.search);
+        searchParams.set("qr", qrText);
+        window.location.search = "?" + searchParams.toString();
     }
 
     
@@ -213,7 +222,10 @@
                 <textarea 
                     bind:value={qrText} 
                     class="qrinput is-text-monospace"
-                    on:input={() => decode(qrText)}
+                    on:input={() => {
+                        qrError = decode(qrText);
+                        updateURL();
+                    }}
                     placeholder="Paste your (clean) QR code here..."
                     ></textarea>
                 

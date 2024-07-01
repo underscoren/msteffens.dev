@@ -4,6 +4,16 @@
 
 <svelte:head>
     <title>Home | msteffens.dev</title>
+
+    <meta name="description" content="There are many websites like it, but this one is mine.">
+    
+    <meta property="og:title" content="Home" />
+    <meta property="og:description" content="There are many websites like it, but this one is mine.">
+    <meta property="og:author" content="_n" />
+
+    <meta property="og:url" content={`https://msteffens.dev`} />
+
+    <meta name="twitter:card" content="summary" />
 </svelte:head>
 
 <section class="section">
@@ -16,6 +26,6 @@
         <img class="pixellated" width="64" src={coneURL} alt="construction cone" />
     </p>
     <p>Under construction</p>
-    <br />
+    <br/>
     <p>In the meantime maybe check out the <a href="/blog">blog</a>?</p>
 </div>

@@ -1,5 +1,15 @@
 <svelte:head>
     <title>License | msteffens.dev</title>
+
+    <meta name="description" content="License information">
+    
+    <meta property="og:title" content="Tools" />
+    <meta property="og:description" content="License information">
+    <meta property="og:author" content="_n" />
+
+    <meta property="og:url" content={`https://msteffens.dev/license`} />
+
+    <meta name="twitter:card" content="summary" />
 </svelte:head>
 
 <section class="section">
