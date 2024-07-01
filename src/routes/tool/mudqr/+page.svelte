@@ -190,12 +190,6 @@
 
         return "";
     }
-
-    const updateURL = (text: string) => {
-        $page.url.searchParams.set("qr", text);
-        goto(`?${$page.url.searchParams.toString()}`);
-    }
-
     
 </script>
 
@@ -225,7 +219,6 @@
                     class="qrinput is-text-monospace"
                     on:input={() => {
                         qrError = decode(qrText);
-                        updateURL(qrText);
                     }}
                     placeholder="Paste your (clean) QR code here..."
                     ></textarea>
