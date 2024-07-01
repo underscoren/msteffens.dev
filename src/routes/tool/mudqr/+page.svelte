@@ -1,5 +1,7 @@
 <script lang="ts">
     import { browser } from "$app/environment";
+    import { goto } from "$app/navigation";
+    import { page } from "$app/stores";
     import QR from "$lib/qr/QR.svelte";
     import { allPatterns, codewordGroups, combineMask, getModule, getPatternMask, maskFormulae, type BlockCharacter } from "$lib/qr/qrUtils";
     import { toByte } from "$lib/util";
@@ -189,10 +191,9 @@
         return "";
     }
 
-    const updateURL = () => {
-        const searchParams = new URLSearchParams(window.location.search);
-        searchParams.set("qr", qrText);
-        window.location.search = "?" + searchParams.toString();
+    const updateURL = (text: string) => {
+        $page.url.searchParams.set("qr", text);
+        goto(`?${$page.url.searchParams.toString()}`);
     }
 
     
@@ -224,7 +225,7 @@
                     class="qrinput is-text-monospace"
                     on:input={() => {
                         qrError = decode(qrText);
-                        updateURL();
+                        updateURL(qrText);
                     }}
                     placeholder="Paste your (clean) QR code here..."
                     ></textarea>
