@@ -23,8 +23,10 @@
             {/if}
         </p>
         <p>
-            I use self-hosted <a href="https://plausible.io">Plausible</a> for privacy-focused analytics.<br/>
-            No cookies or data are stored, no personal information is tracked, all data is in aggregate. See <a href="/privacy">privacy</a> for more details.
+            I use self-hosted <a href="https://plausible.io">Plausible</a> for privacy-focused
+            analytics.<br />
+            No cookies or data are stored, no personal information is tracked, all data is in aggregate.
+            See <a href="/privacy">privacy</a> for more details.
         </p>
     </div>
 </footer>

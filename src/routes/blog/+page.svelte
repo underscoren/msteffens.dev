@@ -36,10 +36,13 @@
 <svelte:head>
     <title>Blog | msteffens.dev</title>
 
-    <meta name="description" content="If a blog site has no content does it ever get indexed?">
+    <meta name="description" content="If a blog site has no content does it ever get indexed?" />
 
     <meta property="og:title" content="Blog" />
-    <meta property="og:description" content="If a blog site has no content does it ever get indexed?">
+    <meta
+        property="og:description"
+        content="If a blog site has no content does it ever get indexed?"
+    />
     <meta property="og:author" content="_n" />
 
     <meta property="og:url" content={`https://msteffens.dev/blog`} />

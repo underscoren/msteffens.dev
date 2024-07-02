@@ -7,7 +7,7 @@
 
 <svelte:head>
     {#if browser}
-    <script defer data-domain="msteffens.dev" src="https://msteffens.dev/js/script.js"></script>
+        <script defer data-domain="msteffens.dev" src="https://msteffens.dev/js/script.js"></script>
     {/if}
 </svelte:head>
 <Navbar />

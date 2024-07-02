@@ -1,10 +1,11 @@
 <script lang="ts">
     import type { PageData } from "./$types";
-    import "prism-themes/themes/prism-lucario.min.css"
-    
+    import "prism-themes/themes/prism-lucario.min.css";
+
     export let data: PageData;
 
-    const { title, subhead, cover, alt, coverWidth, coverHeight, created, edited, slug } = data.meta;
+    const { title, subhead, cover, alt, coverWidth, coverHeight, created, edited, slug } =
+        data.meta;
 
     const pad = (number: number) => `${number}`.padStart(2, "0");
 
@@ -16,24 +17,24 @@
 
 <svelte:head>
     <title>{title} | msteffens.dev</title>
-    
-    <meta name="description" content={subhead}>
-    
+
+    <meta name="description" content={subhead} />
+
     <meta property="og:title" content={title} />
-    <meta property="og:description" content={subhead}>
+    <meta property="og:description" content={subhead} />
     <meta property="og:author" content="_n" />
 
     <meta property="og:type" content="article" />
     <meta property="og:published_time" content={created} />
-    
+
     {#if created != edited}
-    <meta property="og:modified_time" content={edited} />
+        <meta property="og:modified_time" content={edited} />
     {/if}
-    
+
     {#if cover}
-    <meta property="og:img" content={`https://msteffens.dev${cover}`} />
+        <meta property="og:img" content={`https://msteffens.dev${cover}`} />
     {/if}
-    
+
     <meta property="og:url" content={`https://msteffens.dev/blog/${slug}`} />
 
     <meta name="twitter:card" content="summary" />
@@ -55,8 +56,8 @@
                     <strong>Written:</strong>
                     {formatDate(created)} <br />
                     {#if created != edited}
-                    <strong>Updated:</strong>
-                    {formatDate(edited)}
+                        <strong>Updated:</strong>
+                        {formatDate(edited)}
                     {/if}
                 </div>
 

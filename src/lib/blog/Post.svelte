@@ -3,7 +3,7 @@
     export let cover: string;
     export let title: string;
     export let subhead: string;
-    export let created: string
+    export let created: string;
     export let edited: string;
 </script>
 

@@ -12,14 +12,11 @@ const config = {
     // Consult https://kit.svelte.dev/docs/integrations#preprocessors
     // for more information about preprocessors
     preprocess: [
-        vitePreprocess(), 
-        mdsvex({remarkPlugins: [
-            remarkCodeTitles
-        ],
-        rehypePlugins: [
-            rehypeSlug,
-            [rehypeAutolinkHeadings, {behavior: "wrap"}]
-        ]})
+        vitePreprocess(),
+        mdsvex({
+            remarkPlugins: [remarkCodeTitles],
+            rehypePlugins: [rehypeSlug, [rehypeAutolinkHeadings, { behavior: "wrap" }]],
+        }),
     ],
 
     kit: {

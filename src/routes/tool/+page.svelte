@@ -1,10 +1,10 @@
 <svelte:head>
     <title>Tools | msteffens.dev</title>
-    
-    <meta name="description" content="Various tools and utilities">
-    
+
+    <meta name="description" content="Various tools and utilities" />
+
     <meta property="og:title" content="Tools" />
-    <meta property="og:description" content="Various tools and utilities">
+    <meta property="og:description" content="Various tools and utilities" />
 
     <meta property="og:url" content={`https://msteffens.dev/tool`} />
 

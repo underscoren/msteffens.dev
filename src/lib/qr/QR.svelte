@@ -1,124 +1,118 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
-    import { getModule, getPatternMask, square2DArray, type BlockCharacter, type PatternName, defaultHues, allPatterns, type Bit, type QRReadHistory, type GroupColor } from "./qrUtils";
-
-
+    import {
+        getModule,
+        getPatternMask,
+        square2DArray,
+        type BlockCharacter,
+        type PatternName,
+        defaultHues,
+        allPatterns,
+        type Bit,
+        type QRReadHistory,
+        type GroupColor,
+    } from "./qrUtils";
 
     /// Inputs ///
-
-
 
     /** QR code text string */
     export let qrText: string;
 
     /**
-     * Select which patterns / sections of the QR code to visualize, optionally 
-     * with a custom hue. Special case for "block" pattern, which contains an 
-     * array of module coords and a hue 
-     * 
+     * Select which patterns / sections of the QR code to visualize, optionally
+     * with a custom hue. Special case for "block" pattern, which contains an
+     * array of module coords and a hue
+     *
      * ```
      * visualize = ["finder", "alignment"]
      * visualize = ["finder", ["version", 231]]
      * visualize = ["finder", ["block", [...], 74]]
      * ```
      */
-    export let visualize: ([PatternName, number] | PatternName | ["block", [number, number][], number])[] = [];
+    export let visualize: (
+        | [PatternName, number]
+        | PatternName
+        | ["block", [number, number][], number]
+    )[] = [];
 
     /** Whether or not to enable animation logic */
     export let animate = false;
 
-    export let animState: "paused" | "play" = "paused"; 
+    export let animState: "paused" | "play" = "paused";
     export let animSpeed = 1;
 
     /** Module reading history */
     export let readHistory: QRReadHistory[][] | null = null;
 
-    
     /** Module size in pixels */
     export let moduleSize = 8;
 
     const QRLines = qrText.trim().split("\n") as unknown as BlockCharacter[][]; // i love typescript
     const qrSize = QRLines[0].length;
 
-
-
     /// Visualization ///
-
-
 
     // assign each module to groups based on the pattern they belong to
     const patternGroup = square2DArray<null | string>(qrSize, null);
-    
+
     /** Module to highlight */
-    let highlightedModule: [number, number] 
+    let highlightedModule: [number, number];
     $: highlightedModule = [-1, -1];
-    
+
     /** Highlight color */
-    let highlightedColor: string
+    let highlightedColor: string;
     $: highlightedColor = "";
-    
-    for(const name of allPatterns) {
+
+    for (const name of allPatterns) {
         const mask = getPatternMask(qrSize, name);
-        
-        for(let y = 0; y < qrSize; y++)
-            for(let x = 0; x < qrSize; x++)
-                if(mask[y][x] == 1)
-                    patternGroup[y][x] = name;
+
+        for (let y = 0; y < qrSize; y++)
+            for (let x = 0; x < qrSize; x++) if (mask[y][x] == 1) patternGroup[y][x] = name;
     }
-    
+
     let customHue = square2DArray<null | number>(qrSize, null);
 
     // (ab?)using reactivity to clear the hues array before processing the visualization
     $: visualize && (customHue = square2DArray<null | number>(qrSize, null));
 
-    $: visualize.forEach(opts => {
+    $: visualize.forEach((opts) => {
         let name: PatternName | "block";
         let hue: number;
         let coords: [number, number][] = [];
 
-
-        if(typeof opts == "string") {
+        if (typeof opts == "string") {
             // default hue
             name = opts;
             hue = defaultHues[name];
         } else {
-            if(opts[0] != "block") {
+            if (opts[0] != "block") {
                 // custom hue
                 [name, hue] = opts;
             } else {
                 name = "block";
                 hue = opts[2];
-                coords = opts[1]
+                coords = opts[1];
             }
         }
 
-        if(name == "block") {
-            for(const [x,y] of coords)
-                customHue[y][x] = hue;
-
+        if (name == "block") {
+            for (const [x, y] of coords) customHue[y][x] = hue;
         } else {
             // set custom patterns for the pattern mask
             const mask = getPatternMask(qrSize, name);
-            for(let i = 0; i < qrSize; i++)
-                for(let j = 0; j < qrSize; j++) {
+            for (let i = 0; i < qrSize; i++)
+                for (let j = 0; j < qrSize; j++) {
                     customHue[i][j] = mask[i][j] == 1 ? hue : customHue[i][j];
-    
                 }
         }
-
     });
 
     const offLightness = 72;
     const onLightness = 100 - offLightness;
-    const generateColor = (hue: number | null, on: Bit) => hue ?
-        `hsl(${hue} 100 ${on ? onLightness : offLightness})` :
-        "";
-
-
+    const generateColor = (hue: number | null, on: Bit) =>
+        hue ? `hsl(${hue} 100 ${on ? onLightness : offLightness})` : "";
 
     /// Animation ///
-
-
 
     $: readTickDelay = 250 / animSpeed;
     $: skipTickDelay = 85 / animSpeed;
@@ -132,7 +126,8 @@
     const moduleSkippedColor = "#00fce3";
 
     /** base visualization is all the patterns in red hue, to signify the skipmask */
-    const baseVisualization: ([PatternName, number] | ["block", [number,number][], number])[] = allPatterns.map(pattern => [pattern, 3]); 
+    const baseVisualization: ([PatternName, number] | ["block", [number, number][], number])[] =
+        allPatterns.map((pattern) => [pattern, 3]);
 
     let currentHistoryIndex = 0;
     let currentBit = 0;
@@ -142,71 +137,69 @@
         currentBit = 0;
         currentHistoryIndex = 0;
         bitString = "";
-        
+
         const newVisualization = [...baseVisualization]; // shallow copy, i know. but i'm not modifying the children, so it should be fine
 
-        if(readHistory) 
-            for(const hist of readHistory) {
+        if (readHistory)
+            for (const hist of readHistory) {
                 const moduleGroup = hist
-                    .filter(hist => hist[2] == "read")
-                    .map(([x,y]) => [x,y]) as [number, number][];
+                    .filter((hist) => hist[2] == "read")
+                    .map(([x, y]) => [x, y]) as [number, number][];
 
                 newVisualization.push(["block", moduleGroup, passiveHue]);
             }
-        
+
         visualize = newVisualization;
-        dispatcher("bitUpdate", {bitString});
-    }
+        dispatcher("bitUpdate", { bitString });
+    };
 
     // animation stuff shouldn't be prerendered
     onMount(() => {
         let then = document.timeline.currentTime as number;
-        
+
         let t = 0;
         let tickDelay = readTickDelay;
 
         const animLoop = (now: number) => {
             const delta = now - then;
             then = now;
-            
-            if(animState == "play")
-                t += delta;
 
-            if(t > tickDelay) {
+            if (animState == "play") t += delta;
+
+            if (t > tickDelay) {
                 t = 0;
 
-                if(!readHistory)
-                    return requestAnimationFrame(animLoop)
+                if (!readHistory) return requestAnimationFrame(animLoop);
 
                 const oldHistory = readHistory[currentHistoryIndex];
 
                 // roll over the current bit and current history reading block
                 currentBit++;
-                if(currentBit >= oldHistory?.length) {
+                if (currentBit >= oldHistory?.length) {
                     currentBit = 0;
 
                     currentHistoryIndex++;
-                    if(currentHistoryIndex >= readHistory.length) {
+                    if (currentHistoryIndex >= readHistory.length) {
                         currentHistoryIndex = 0;
                         bitString = "";
                     }
                 }
-                
+
                 const currentHistory = readHistory[currentHistoryIndex];
                 const [x, y, state] = currentHistory[currentBit];
-                
-                if(state == "read") {
+
+                if (state == "read") {
                     bitString += getModule(x, y, QRLines);
-                    dispatcher("bitUpdate", {bitString});
+                    dispatcher("bitUpdate", { bitString });
                 }
 
                 const newVisualization = [...baseVisualization];
 
                 // iterate over all the history and add blocks to the visualization
-                for(const hist of readHistory) {
+                for (const hist of readHistory) {
                     const moduleGroup = hist
-                        .filter(([x,y,state]) => state == "read")
-                        .map(([x,y]) => [x,y]) as [number, number][];
+                        .filter(([x, y, state]) => state == "read")
+                        .map(([x, y]) => [x, y]) as [number, number][];
 
                     const hue = hist == currentHistory ? activeHue : passiveHue;
 
@@ -220,56 +213,52 @@
                 tickDelay = state == "read" ? readTickDelay : skipTickDelay;
             }
 
-            requestAnimationFrame(animLoop)
+            requestAnimationFrame(animLoop);
         };
 
-        if(animate) {
+        if (animate) {
             resetAnim();
             requestAnimationFrame(animLoop);
         }
     });
 
-
     /** Event dispatcher */
     const dispatcher = createEventDispatcher();
-
 </script>
 
-<div class="qr-container" style:width={`${qrSize * moduleSize}px`} style:height={`${qrSize * moduleSize}px`}>
+<div
+    class="qr-container"
+    style:width={`${qrSize * moduleSize}px`}
+    style:height={`${qrSize * moduleSize}px`}
+>
     <div class="qr">
         {#each QRLines[0] as _, y}
-        {#each QRLines[0] as _, x}
-        <div class="module" 
-            style:width={`${moduleSize}px`}
-            style:height={`${moduleSize}px`}
-            
-            class:on={getModule(x, y, QRLines)}
-            
-            style:background-color={generateColor(customHue[y][x], getModule(x,y, QRLines))}
-            
-            data-group={patternGroup[y][x]}
-            
-            class:highlight={highlightedModule[0] == x && highlightedModule[1] == y}
-            style:border-width={
-                highlightedModule[0] == x && highlightedModule[1] == y ? 
-                "2px" : ""
-            }
-
-            style:border-color={
-                highlightedModule[0] == x && highlightedModule[1] == y ? 
-                `${highlightedColor}` : ""
-            }
-            
-            style:box-shadow={
-                highlightedModule[0] == x && highlightedModule[1] == y ? 
-                `0 0 15px 0 ${highlightedColor}` : ""
-            }
-            
-            on:mouseenter={ev => dispatcher("moduleenter", {module: ev.currentTarget})}
-            on:mouseleave={ev => dispatcher("moduleleave", {module: ev.currentTarget})}
-            role="none"
-        ></div>
-        {/each}
+            {#each QRLines[0] as _, x}
+                <div
+                    class="module"
+                    style:width={`${moduleSize}px`}
+                    style:height={`${moduleSize}px`}
+                    class:on={getModule(x, y, QRLines)}
+                    style:background-color={generateColor(
+                        customHue[y][x],
+                        getModule(x, y, QRLines)
+                    )}
+                    data-group={patternGroup[y][x]}
+                    class:highlight={highlightedModule[0] == x && highlightedModule[1] == y}
+                    style:border-width={highlightedModule[0] == x && highlightedModule[1] == y
+                        ? "2px"
+                        : ""}
+                    style:border-color={highlightedModule[0] == x && highlightedModule[1] == y
+                        ? `${highlightedColor}`
+                        : ""}
+                    style:box-shadow={highlightedModule[0] == x && highlightedModule[1] == y
+                        ? `0 0 15px 0 ${highlightedColor}`
+                        : ""}
+                    on:mouseenter={(ev) => dispatcher("moduleenter", { module: ev.currentTarget })}
+                    on:mouseleave={(ev) => dispatcher("moduleleave", { module: ev.currentTarget })}
+                    role="none"
+                ></div>
+            {/each}
         {/each}
     </div>
 </div>
@@ -306,5 +295,5 @@
 
             &.highlight
                 transition: border-width 0s, border-color 0s
-                
+
 </style>
