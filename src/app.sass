@@ -1,6 +1,6 @@
 
 // fonts
-@import "./style/fonts"
+@use "style/fonts"
 
 // font stacks
 $family-title: "Lato", "Helvetica", "Arial", "Ubuntu", sans-serif
@@ -8,34 +8,34 @@ $family-sans-serif: "Inter", "Helvetica", "Arial", "Ubuntu", sans-serif
 $family-monospace: "mononoki", "Inconsolata", "Roboto Mono", "Consolas", monospace
 
 // colors
-@import "./style/colors"
+@use "style/colors"
 
 // bulma
 
 // color palette
-$primary: $blue
-$info: $brown
+$primary: colors.$blue
+$info: colors.$brown
 // $success: $green
 // $warning: $yellow
-$danger: $red
+$danger: colors.$red
 // $light: $white-ter
 // $dark: $grey-darker
 
 $title-family: $family-title
 
-@import "../node_modules/bulma/sass/utilities"
-@import "../node_modules/bulma/sass/base"
-@import "../node_modules/bulma/sass/themes"
+@use "../node_modules/bulma/sass/utilities"
+@use "../node_modules/bulma/sass/base"
+@use "../node_modules/bulma/sass/themes"
 
-@import "../node_modules/bulma/sass/elements"
-@import "../node_modules/bulma/sass/components/navbar"
-@import "../node_modules/bulma/sass/components/message"
-@import "../node_modules/bulma/sass/layout/section"
-@import "../node_modules/bulma/sass/layout/container"
-@import "../node_modules/bulma/sass/layout/footer"
-@import "../node_modules/bulma/sass/grid/columns"
+@use "../node_modules/bulma/sass/elements"
+@use "../node_modules/bulma/sass/components/navbar"
+@use "../node_modules/bulma/sass/components/message"
+@use "../node_modules/bulma/sass/layout/section"
+@use "../node_modules/bulma/sass/layout/container"
+@use "../node_modules/bulma/sass/layout/footer"
+@use "../node_modules/bulma/sass/grid/columns"
 
-@import "../node_modules/bulma/sass/helpers/color"
+@use "../node_modules/bulma/sass/helpers/color"
 
 // global styles
 body
@@ -66,7 +66,7 @@ body
     align-items: center
 
 .is-text-monospace
-    font-family: $family-monospace
+    font-family: utilities.$family-monospace
 
 
 // fix for awkward nested list margins

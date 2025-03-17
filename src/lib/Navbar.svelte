@@ -1,5 +1,5 @@
 <script lang="ts">
-    let showNav = false;
+    let showNav = $state(false);
 </script>
 
 <nav class="navbar" role="navigation" aria-label="main navigation">
@@ -13,7 +13,7 @@
             class="navbar-burger"
             aria-label="menu"
             aria-expanded="false"
-            on:click={() => (showNav = !showNav)}
+            onclick={() => (showNav = !showNav)}
         >
             <span aria-hidden="true"></span>
             <span aria-hidden="true"></span>

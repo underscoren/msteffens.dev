@@ -2,7 +2,11 @@
     import type { PageData } from "./$types";
     import "prism-themes/themes/prism-lucario.min.css";
 
-    export let data: PageData;
+    interface Props {
+        data: PageData;
+    }
+
+    let { data }: Props = $props();
 
     const { title, subhead, cover, alt, coverWidth, coverHeight, created, edited, slug } =
         data.meta;
@@ -61,7 +65,7 @@
                     {/if}
                 </div>
 
-                <svelte:component this={data.Contents} />
+                <data.Contents />
             </div>
         </div>
     </article>

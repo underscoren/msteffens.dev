@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { run } from "svelte/legacy";
+
     import { browser } from "$app/environment";
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
@@ -14,7 +16,9 @@
     } from "$lib/qr/qrUtils";
     import { toByte } from "$lib/util";
 
-    let qrText = browser ? new URLSearchParams(window.location.search).get("qr") ?? "" : "";
+    let qrText = $state(
+        browser ? (new URLSearchParams(window.location.search).get("qr") ?? "") : ""
+    );
 
     // sanity checks
 
@@ -43,23 +47,26 @@
         return "";
     };
 
-    $: qrError = validateQR(qrText.trim());
+    let qrError;
+    run(() => {
+        qrError = validateQR(qrText.trim());
+    });
 
     /// stats and debug
 
-    let qrSize: number;
-    let version: number;
-    let format: number;
-    let ecLevel: number;
-    let mask: number;
-    let groups: [number, number][];
+    let qrSize: number = $state();
+    let version: number = $state();
+    let format: number = $state();
+    let ecLevel: number = $state();
+    let mask: number = $state();
+    let groups: [number, number][] = $state();
     let maskFormula: (x: number, y: number) => boolean;
     let interleavedBlocks: string[];
-    let dataBlocks: string[][][];
-    let encodedData: string;
-    let encoding: number;
-    let length: number;
-    let decoded: string;
+    let dataBlocks: string[][][] = $state();
+    let encodedData: string = $state();
+    let encoding: number = $state();
+    let length: number = $state();
+    let decoded: string = $state();
 
     /** Decode QR Code */
     const decode = (text: string) => {
@@ -219,7 +226,7 @@
                 <textarea
                     bind:value={qrText}
                     class="qrinput is-text-monospace"
-                    on:input={() => {
+                    oninput={() => {
                         qrError = decode(qrText);
                     }}
                     placeholder="Paste your (clean) QR code here..."

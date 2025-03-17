@@ -1,10 +1,14 @@
 <script lang="ts">
-    export let slug: string;
-    export let cover: string;
-    export let title: string;
-    export let subhead: string;
-    export let created: string;
-    export let edited: string;
+    interface Props {
+        slug: string;
+        cover: string;
+        title: string;
+        subhead: string;
+        created: string;
+        edited: string;
+    }
+
+    let { slug, cover, title, subhead, created, edited }: Props = $props();
 </script>
 
 <article>

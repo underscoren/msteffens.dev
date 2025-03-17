@@ -1,8 +1,12 @@
 <script lang="ts">
     import { page } from "$app/stores";
 
-    $: url = `https://github.com/underscoren/msteffens.dev/blob/master/src/routes${$page.url.pathname == "/" ? "" : $page.url.pathname}/+page.svelte`;
-    $: blogpostUrl = `https://github.com/underscoren/msteffens.dev/blob/master/src/posts/${$page.params.slug}.svx`;
+    let url = $derived(
+        `https://github.com/underscoren/msteffens.dev/blob/master/src/routes${$page.url.pathname == "/" ? "" : $page.url.pathname}/+page.svelte`
+    );
+    let blogpostUrl = $derived(
+        `https://github.com/underscoren/msteffens.dev/blob/master/src/posts/${$page.params.slug}.svx`
+    );
 </script>
 
 <footer class="footer" style:justify-self={"end"}>

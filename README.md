@@ -8,16 +8,16 @@ Blog section heavily inspired by [josh-collinsworth/sveltekit-blog-starter](http
 
 Stack:
 
--   Tooling: Vite
--   Framework: SvelteKit
--   Languages:
-    -   TypeScript
-    -   SASS
--   Libraries:
-    -   Bulma (for styling)
--   DevOps:
-    -   Docker
-    -   Github Actions
+- Tooling: Vite
+- Framework: SvelteKit
+- Languages:
+    - TypeScript
+    - SASS
+- Libraries:
+    - Bulma (for styling)
+- DevOps:
+    - Docker
+    - Github Actions
 
 ## Development
 
