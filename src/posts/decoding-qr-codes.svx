@@ -2,9 +2,9 @@
 title: "Decoding QR Codes for fun and profit"
 subhead: "trust hates him, scrape T2 with this one simple trick!"
 created: "2024-07-01"
-edited: "2024-07-01"
+edited: "2024-03-18"
 cover: "/img/qr/qr_hm.png"
-alt: "Ironically, I don't cover error correction"
+imgtitle: "Ironically, I don't cover error correction"
 coverWidth: "421px"
 coverHeight: "306px"
 ---
@@ -25,9 +25,21 @@ There's a lot more involved on the error correction and image processing side, b
 <script lang="ts">
     import GroupHover from "$lib/qr/GroupHover.svelte";
     import QR from "$lib/qr/QR.svelte"
-    import { allPatterns, codewordGroups, combineMask, defaultHues, getModule, getPatternMask, groupColor, maskFormulae, type PatternName, type QRReadHistory } from "$lib/qr/qrUtils"
-    import { onMount } from "svelte"
+    import { 
+        allPatterns, 
+        codewordGroups, 
+        combineMask, 
+        defaultHues, 
+        getModule, 
+        getPatternMask, 
+        groupColor, 
+        maskFormulae, 
+        type PatternName, 
+        type QRReadHistory 
+    } from "$lib/qr/qrUtils"
     import { toByte } from "$lib/util";
+    
+    import { onMount } from "svelte"
 
     const qrText = `
 █▀▀▀▀▀█ █▀   ███▀ █▄█▀▀▀▄▄▀ ▄▀█▄ ▄▄▄  ▄▄█ █▀▀▀▀▀█
@@ -64,8 +76,13 @@ There's a lot more involved on the error correction and image processing side, b
     /// Visualization ///
 
 
+    let highlightedPattern: PatternName | undefined = $state();
+    let toVisualize: PatternName[] = $derived.by(() => {
+        if(highlightedPattern)
+            return [highlightedPattern]
 
-    $: toVisualize = allPatterns;
+        return allPatterns
+    });
 
     let finderText: HTMLSpanElement;
     let timingText: HTMLSpanElement;
@@ -74,10 +91,12 @@ There's a lot more involved on the error correction and image processing side, b
     let formatText: HTMLSpanElement;
     let darkModuleText: HTMLSpanElement;
 
-    let textMap: Record<PatternName, HTMLSpanElement> = {};
 
     onMount(() => {
-        textMap = {
+        // set the text shadow color css variables for each text element in the QR visualisation
+        // i don't think there's a way to do this programmatically that isn't in the browser
+        
+        const textMap: Record<PatternName, HTMLSpanElement> = {
             "finder": finderText,
             "timing": timingText,
             "alignment": alignmentText,
@@ -87,25 +106,8 @@ There's a lot more involved on the error correction and image processing side, b
         }
 
         for(const [name, element] of Object.entries(textMap))
-            element.style.textShadow = `0 0 10px hsl(${defaultHues[name]} 100 50)`;
+            element.style.setProperty("--shadowHue", `hsl(${defaultHues[name]} 100 50)`);
     });
-
-    function setVisualize(name: string) {
-        if(!textMap[name]) return; // handle prerender error
-
-        toVisualize = [name];
-        textMap[name].style.textShadow = `0 0 10px hsl(${defaultHues[name]} 100 60), 0 0 20px hsl(${defaultHues[name]} 100 60), 0 0 20px hsl(${defaultHues[name]} 100 60), 0 0 25px hsl(${defaultHues[name]} 100 60)`;
-    }
-
-    function clearVisualize() {
-        let old = toVisualize[0];
-        if(!textMap[old]) return; // handle prerender error
-
-        toVisualize = allPatterns;
-
-        for(const [name, element] of Object.entries(textMap))
-            element.style.textShadow = `0 0 10px hsl(${defaultHues[name]} 100 50)`;
-    }
 
 
 
@@ -348,7 +350,7 @@ There's a lot more involved on the error correction and image processing side, b
         ])
         .concat(allPatternsRed)
     
-    let hoverVis = defaultHoverVis;
+    let hoverVis = $state(defaultHoverVis);
 
 
 
@@ -357,10 +359,10 @@ There's a lot more involved on the error correction and image processing side, b
 
 
     let animatedQR: QR;
-    let animState = "paused";
-    let animSpeed = 1;
+    let animState = $state("paused");
+    let animSpeed = $state(1);
 
-    let bitString = "";
+    let bitString = $state("");
 </script>
 
 ## Anatomy of a QR Code
@@ -417,17 +419,17 @@ Functional modules are used for various metadata or image processing purposes.
 <QR 
     qrText={qrText} 
     visualize={toVisualize} 
-    on:moduleenter={({detail}) => setVisualize(detail.module.dataset.group)}
-    on:moduleleave={() => clearVisualize()}
+    moduleenter={(target) => highlightedPattern = target.dataset.group}
+    moduleleave={() => highlightedPattern = undefined}
 />
 
 Tip: Hover over me, I'm interactive!
 
 <div class="columns">
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("finder")}
-        on:mouseleave={() => clearVisualize()}
+        class={["column", "is-4", "glowy-text", { active: highlightedPattern == "finder" }]}
+        onmouseenter={() => highlightedPattern = "finder"}
+        onmouseleave={() => highlightedPattern = undefined}
         bind:this={finderText}
         role="none"
     >
@@ -435,9 +437,9 @@ Tip: Hover over me, I'm interactive!
     </span>
     
     <span
-        class="column is-4"
-        on:mouseenter={() => setVisualize("timing")}
-        on:mouseleave={() => clearVisualize()}
+        class={["column", "is-4", "glowy-text", { active: highlightedPattern == "timing" }]}
+        onmouseenter={() => highlightedPattern = "timing"}
+        onmouseleave={() => highlightedPattern = undefined}
         bind:this={timingText}
         role="none"
     >
@@ -445,9 +447,9 @@ Tip: Hover over me, I'm interactive!
     </span> 
     
     <span
-        class="column is-4"
-        on:mouseenter={() => setVisualize("alignment")}
-        on:mouseleave={() => clearVisualize()}
+        class={["column", "is-4", "glowy-text", { active: highlightedPattern == "alignment" }]}
+        onmouseenter={() => highlightedPattern = "alignment"}
+        onmouseleave={() => highlightedPattern = undefined}
         bind:this={alignmentText}
         role="none"
     >
@@ -456,9 +458,9 @@ Tip: Hover over me, I'm interactive!
 </div>
 <div class="columns">
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("format")}
-        on:mouseleave={() => clearVisualize()}
+        class={["column", "is-4", "glowy-text", { active: highlightedPattern == "format" }]}
+        onmouseenter={() => highlightedPattern = "format"}
+        onmouseleave={() => highlightedPattern = undefined}
         bind:this={formatText}
         role="none"
     >
@@ -466,9 +468,9 @@ Tip: Hover over me, I'm interactive!
     </span> 
     
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("darkModule")}
-        on:mouseleave={() => clearVisualize()}
+        class={["column", "is-4", "glowy-text", { active: highlightedPattern == "darkModule" }]}
+        onmouseenter={() => highlightedPattern = "darkModule"}
+        onmouseleave={() => highlightedPattern = undefined}
         bind:this={darkModuleText}
         role="none"
     >
@@ -476,9 +478,9 @@ Tip: Hover over me, I'm interactive!
     </span> 
     
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("version")}
-        on:mouseleave={() => clearVisualize()}
+        class={["column", "is-4", "glowy-text", { active: highlightedPattern == "version" }]}
+        onmouseenter={() => highlightedPattern = "version"}
+        onmouseleave={() => highlightedPattern = undefined}
         bind:this={versionText}
         role="none"
     >
@@ -893,11 +895,11 @@ It should look like this:
             qrText={qrText}
             bind:this={animatedQR} 
             animate={"bits"}
-            readHistory={readHistory}
-            animState={animState} 
-            animSpeed={animSpeed}
-            on:bitUpdate={ev => {
-                bitString = ev.detail.bitString;
+            {readHistory}
+            {animState} 
+            {animSpeed}
+            bitUpdate={bs => {
+                bitString = bs;
             }} />
     </div>
     <div class="column">
@@ -911,11 +913,11 @@ It should look like this:
         class="button" 
         class:is-success={animState == "paused"}
         class:is-warning={animState == "play"}
-        on:click={() => { animState = animState == "play" ? "paused" : "play" }}
+        onclick={() => { animState = animState == "play" ? "paused" : "play" }}
     >{animState == "paused" ? "Play" : "Pause"}</button>
     <button 
         class="button is-danger"
-        on:click={() => { animatedQR.resetAnim() }}
+        onclick={() => { animatedQR.resetAnim() }}
     >Reset</button>
 
     <label class="label" for="name">Speed:</label>
@@ -1036,8 +1038,8 @@ To give you an idea of how it should look:
     groups={dataBlocks} 
     colors={groupColors}
     
-    on:hoveron={ev => {const {g, b} = ev.detail; hoverVis = groupBlockHoverVis(g, b)}}
-    on:hoveroff={() => hoverVis = defaultHoverVis}
+    hoveron={({g, b}) => hoverVis = groupBlockHoverVis(g, b)}
+    hoveroff={() => hoverVis = defaultHoverVis}
     />
 
 <br>
@@ -1117,3 +1119,11 @@ Finally, we have our big reveal, the secret message you've undoubtedly been dyin
 Oh. Not sure what that means, really. Maybe you should carry on working on t2 scraper?
 
 PS: If you've been paying attention, you'll notice that we only have 65 bytes, but our qr code has 86 codewords total. If you look closely, you'll see a repeated pattern of `ec` and `11` at the end. This is actually intentional padding, used to fill up any remaining space. It's not that interesting unless you're worried about data integrity...
+
+<style lang="sass">
+    .glowy-text
+        text-shadow: 0 0 10px var(--shadowHue)
+
+        &.active
+            text-shadow: 0 0 10px var(--shadowHue), 0 0 20px var(--shadowHue), 0 0 20px var(--shadowHue), 0 0 25px var(--shadowHue)
+</style>

@@ -22,7 +22,7 @@
         <div class="tool-grid">
             <!-- TODO: make this less terrible -->
             <article>
-                <a href={`/tool/mudqr`}>
+                <a href="/tool/mudqr">
                     <div class="tool-cover" style:background-image={`url(/img/qr/qr_hm.png)`}></div>
                     <h1>Hackmud QR Reader</h1>
                     <p>QR decoder showing advanced debug information</p>
@@ -39,8 +39,8 @@
 </section>
 
 <style lang="sass">
+    @use "../../style/colors"
     @import "../../../node_modules/bulma/sass/utilities/mixins"
-    @import "../../style/colors"
 
     .tool-grid
         display: grid
@@ -61,7 +61,7 @@
             display: block
             width: 100%
             height: 100%
-            color: $white
+            color: colors.$white
 
         h1
             margin: 0.5rem 0rem

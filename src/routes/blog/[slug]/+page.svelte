@@ -8,7 +8,7 @@
 
     let { data }: Props = $props();
 
-    const { title, subhead, cover, alt, coverWidth, coverHeight, created, edited, slug } =
+    const { title, subhead, cover, imgtitle, coverWidth, coverHeight, created, edited, slug } =
         data.meta;
 
     const pad = (number: number) => `${number}`.padStart(2, "0");
@@ -52,7 +52,8 @@
                 <!-- TODO: aside content -->
             </div>
             <div class="column is-8-desktop">
-                <img class="cover" src={cover} {alt} />
+                <!-- svelte-ignore a11y_missing_attribute -->
+                <img class="cover" src={cover} title={imgtitle} />
 
                 <h1 class="is-text-monospace">{title}</h1>
 

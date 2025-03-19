@@ -2,7 +2,7 @@
     import "../app.sass";
     import Navbar from "$lib/Navbar.svelte";
     import Footer from "$lib/Footer.svelte";
-    import { browser } from "$app/environment";
+    import { browser, dev } from "$app/environment";
     interface Props {
         children?: import("svelte").Snippet;
     }
@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-    {#if browser}
+    {#if browser && !dev}
         <script
             defer
             data-domain="msteffens.dev"

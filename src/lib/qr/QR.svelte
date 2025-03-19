@@ -1,7 +1,5 @@
 <script lang="ts">
-    import { run } from "svelte/legacy";
-
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
     import {
         getModule,
         getPatternMask,
@@ -12,7 +10,6 @@
         allPatterns,
         type Bit,
         type QRReadHistory,
-        type GroupColor,
     } from "./qrUtils";
 
     /// Inputs ///
@@ -40,6 +37,12 @@
         readHistory?: QRReadHistory[][] | null;
         /** Module size in pixels */
         moduleSize?: number;
+        /** callback when the read animation bitstring changes */
+        bitUpdate?: (bitString: string) => any
+        /** callback when a module started being hovered */
+        moduleenter?: (target: EventTarget & HTMLDivElement) => any
+        /** callback when a module stopped being hovered */
+        moduleleave?: (target: EventTarget & HTMLDivElement) => any
     }
 
     let {
@@ -50,15 +53,29 @@
         animSpeed = 1,
         readHistory = null,
         moduleSize = 8,
+        bitUpdate,
+        moduleenter,
+        moduleleave,
     }: Props = $props();
 
-    const QRLines = qrText.trim().split("\n") as unknown as BlockCharacter[][]; // i love typescript
-    const qrSize = QRLines[0].length;
+    const QRLines = $derived(qrText.trim().split("\n") as unknown as BlockCharacter[][]); // i love typescript
+    const qrSize = $derived(QRLines[0].length);
 
     /// Visualization ///
 
     // assign each module to groups based on the pattern they belong to
-    const patternGroup = $state(square2DArray<null | string>(qrSize, null));
+    const patternGroup = $derived.by(() => {
+        const patternGroup = square2DArray<null | string>(qrSize, null);
+
+        for (const name of allPatterns) {
+            const mask = getPatternMask(qrSize, name);
+
+            for (let y = 0; y < qrSize; y++)
+                for (let x = 0; x < qrSize; x++) if (mask[y][x] == 1) patternGroup[y][x] = name;
+        }
+
+        return patternGroup
+    });
 
     /** Module to highlight */
     let highlightedModule: [number, number] = $state([-1, -1]);
@@ -66,21 +83,11 @@
     /** Highlight color */
     let highlightedColor: string = $state("");
 
-    for (const name of allPatterns) {
-        const mask = getPatternMask(qrSize, name);
+    
 
-        for (let y = 0; y < qrSize; y++)
-            for (let x = 0; x < qrSize; x++) if (mask[y][x] == 1) patternGroup[y][x] = name;
-    }
-
-    let customHue = $state(square2DArray<null | number>(qrSize, null));
-
-    // (ab?)using reactivity to clear the hues array before processing the visualization
-    run(() => {
-        visualize && (customHue = square2DArray<null | number>(qrSize, null));
-    });
-
-    run(() => {
+    let customHue = $derived.by(() => {
+        const customHue = square2DArray<null | number>(qrSize, null)
+        
         visualize.forEach((opts) => {
             let name: PatternName | "block";
             let hue: number;
@@ -112,6 +119,8 @@
                     }
             }
         });
+
+        return customHue;
     });
 
     const offLightness = 72;
@@ -157,7 +166,7 @@
             }
 
         visualize = newVisualization;
-        dispatcher("bitUpdate", { bitString });
+        bitUpdate?.(bitString);
     };
 
     // animation stuff shouldn't be prerendered
@@ -197,7 +206,7 @@
 
                 if (state == "read") {
                     bitString += getModule(x, y, QRLines);
-                    dispatcher("bitUpdate", { bitString });
+                    bitUpdate?.(bitString);
                 }
 
                 const newVisualization = [...baseVisualization];
@@ -229,8 +238,6 @@
         }
     });
 
-    /** Event dispatcher */
-    const dispatcher = createEventDispatcher();
 </script>
 
 <div
@@ -261,8 +268,8 @@
                     style:box-shadow={highlightedModule[0] == x && highlightedModule[1] == y
                         ? `0 0 15px 0 ${highlightedColor}`
                         : ""}
-                    onmouseenter={(ev) => dispatcher("moduleenter", { module: ev.currentTarget })}
-                    onmouseleave={(ev) => dispatcher("moduleleave", { module: ev.currentTarget })}
+                    onmouseenter={(ev) => moduleenter?.(ev.currentTarget)}
+                    onmouseleave={(ev) => moduleleave?.(ev.currentTarget)}
                     role="none"
                 ></div>
             {/each}

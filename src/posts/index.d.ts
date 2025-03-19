@@ -4,7 +4,7 @@ type PostMetadata = {
     created: string;
     edited: string;
     cover: string;
-    alt: string;
+    imgtitle: string;
     coverWidth: string;
     coverHeight: string;
     slug: string;

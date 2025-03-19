@@ -2,12 +2,17 @@
     let showNav = $state(false);
 </script>
 
+<!-- svelte-ignore a11y_no_redundant_roles -->
 <nav class="navbar" role="navigation" aria-label="main navigation">
+    <!-- svelte-ignore a11y_interactive_supports_focus -->
     <div class="navbar-brand">
         <a class="navbar-item" href="/">
             <img width="30" src="/logo.png" alt="Logo" />
         </a>
 
+        <!-- svelte-ignore a11y_interactive_supports_focus -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_missing_attribute -->
         <a
             role="button"
             class="navbar-burger"
@@ -33,8 +38,8 @@
 </nav>
 
 <style lang="sass">
-    @import "../style/colors"
+    @use "../style/colors"
 
     nav
-        border-bottom: solid 1px $blue
+        border-bottom: solid 1px colors.$blue
 </style>

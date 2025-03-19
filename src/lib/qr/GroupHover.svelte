@@ -1,15 +1,14 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
     import type { GroupColor } from "./qrUtils";
 
     interface Props {
         groups: string[][][];
         colors: GroupColor[][][];
+        hoveron: (data: { g: number, b: number, i: number }) => any
+        hoveroff: () => any
     }
 
-    let { groups, colors }: Props = $props();
-
-    const dispatcher = createEventDispatcher();
+    let { groups, colors, hoveron, hoveroff }: Props = $props();
 </script>
 
 {#each groups as group, g}
@@ -18,13 +17,17 @@
         {#each group as block, b}
             <div class="block">
                 <p>
-                    Block {b}: {#each block as bits, i}<code
-                            onmouseenter={() => dispatcher("hoveron", { g, b, i })}
-                            onmouseleave={() => dispatcher("hoveroff", { g, b, i })}
+                    Block {b}: 
+                    {#each block as bits, i}
+                        <code
+                            onmouseenter={() => hoveron({ g, b, i })}
+                            onmouseleave={() => hoveroff()}
                             style:background-color={`hsl(${colors[g][b][i].blockHue}deg 75% ${colors[g][b][i].byteValue}%)`}
                             style:color={colors[g][b][i].byteValue > 50 ? "#000" : "#fff"}
-                            >{colors[g][b][i].byte}</code
-                        >{/each}
+                            >
+                            {colors[g][b][i].byte}
+                        </code>
+                    {/each}
                 </p>
             </div>
         {/each}

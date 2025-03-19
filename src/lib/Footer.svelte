@@ -1,11 +1,11 @@
 <script lang="ts">
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
 
     let url = $derived(
-        `https://github.com/underscoren/msteffens.dev/blob/master/src/routes${$page.url.pathname == "/" ? "" : $page.url.pathname}/+page.svelte`
+        `https://github.com/underscoren/msteffens.dev/blob/master/src/routes${page.url.pathname == "/" ? "" : page.url.pathname}/+page.svelte`
     );
     let blogpostUrl = $derived(
-        `https://github.com/underscoren/msteffens.dev/blob/master/src/posts/${$page.params.slug}.svx`
+        `https://github.com/underscoren/msteffens.dev/blob/master/src/posts/${page.params.slug}.svx`
     );
 </script>
 
@@ -19,7 +19,7 @@
             contents made by me is licensed under
             <a href="https://github.com/underscoren/msteffens.dev/blob/master/LICENSE">ISC</a>. All
             other content and libraries use <a href="/license">their own licences</a>.<br />
-            {#if $page.url.pathname.includes("/blog/")}
+            {#if page.url.pathname.includes("/blog/")}
                 Spotted an error? Check out the source for this page <a href={blogpostUrl}>here</a>,
                 and submit an issue or PR please!
             {:else}

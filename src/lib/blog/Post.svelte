@@ -26,7 +26,7 @@
 </article>
 
 <style lang="sass">
-    @import "../../style/colors"
+    @use "../../style/colors"
     article
         padding: 0.5rem
         
@@ -34,7 +34,7 @@
             display: block
             width: 100%
             height: 100%
-            color: $white
+            color: colors.$white
 
         h1
             margin: 0.5rem 0rem

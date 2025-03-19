@@ -8,5 +8,6 @@
         <p>{$page.error?.message}</p>
         <br />
         <p>Maybe try again, or go <a href="/">Home</a></p>
+        <p>If this is something important please <a href="https://github.com/underscoren/msteffens.dev/issues/new">raise an issue</a> on my github!</p>
     </div>
 </section>
