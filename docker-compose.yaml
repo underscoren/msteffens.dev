@@ -3,6 +3,7 @@ services:
         container_name: msteffens.dev
         build: .
         ports:
+            # I'm behind a reverse proxy with TLS termination. Use port 80 for default HTTP
             - 14632:14632
         environment:
             - PORT=14632

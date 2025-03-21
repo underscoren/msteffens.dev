@@ -1,0 +1,38 @@
+---
+kind: pipeline
+type: ssh
+name: default
+
+server:
+  host:
+    from_secret: ssh_host
+  user:
+    from_secret: ssh_user
+  ssh-key:
+    from_secret: ssh_key
+  
+
+# drone automatically clones the repo into a tmp directory
+# im gonna be re-using the same directory so there's not much point
+clone:
+  disable: true
+
+steps:
+ - name: pull remote changes
+   commands:
+    - cd /conatiners/msteffens.dev
+    - git pull
+
+ - name: rebuild and restart container
+   commands:
+    - docker compose up --build -d
+
+ - name: cleanup old build
+   commands:
+    - docker image prune -f
+  
+trigger:
+  branch:
+   - master
+  event:
+   - push

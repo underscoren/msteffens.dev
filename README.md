@@ -15,9 +15,10 @@ Stack:
     - SASS
 - Libraries:
     - Bulma (for styling)
-- DevOps:
+- CI/CD:
     - Docker
-    - Github Actions
+    - Docker Compose
+    - [Drone CI](https://www.drone.io/)
 
 ## Development
 
@@ -31,7 +32,7 @@ npm install
 npm run dev
 ```
 
-Which will start a dev server. You can make changes and it will automatically re-build and reload live. Check out more details at [https://kit.svelte.dev](https://kit.svelte.dev)
+Which will start a dev server. You can make changes and it will automatically re-build and reload live. Check out more details at [https://svelte.dev](https://svelte.dev)
 
 Make sure to run `npm run format` before comitting to auto-format your code!
 
@@ -39,7 +40,7 @@ TODO: Unit tests (famous last words)
 
 ## Building
 
-Checkout the `Dockerfile`, `docker-compose.yml` and `.github/workflows` to see how I do automated building and deployment. Personally, I use docker to make hosting and deployment easier.
+Checkout the `Dockerfile`, `docker-compose.yml` and `.drone.yml` to see how I do automated building and deployment.
 
 Technically, the only thing you need to build the site is
 
@@ -55,12 +56,12 @@ node build
 
 To run the built sveltekit web server.
 
-However, I use Docker to build an image, then upload that directly to my server.
-I prefer to use docker compose files to manage my containers. This is a personal site, so uploading to dockerhub seems dumb. The next best step is hosting your own registry, which also seems dumb for just a single image. The last rung seems to be just sending the image over ssh to the server, which is why my build & deploy looks like:
+Personally, I use Docker Compose and Drone CI to make automated builds and handle server process management easier. When I push a commit to github the `.drone.yml` pipeline runs on my server (self-hosted Drone CI server), basically doing:
 
 ```bash
-docker build . --tag msteffens.dev:latest
-docker save msteffens.dev | bzip2 | ssh user@server docker load
+cd /my/container
+git pull
+docker compose up -d --build
 ```
 
-After which it's just a case of re-creating the container, which should be using the `:latest` image.
+This pulls any remote changes, rebuilds the docker image locally, and re-starts the container with the latest build image and the config stored at `docker-compose.yml`
