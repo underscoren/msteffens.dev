@@ -8,7 +8,7 @@ server:
     from_secret: ssh_host
   user:
     from_secret: ssh_user
-  ssh-key:
+  ssh_key:
     from_secret: ssh_key
   
 
