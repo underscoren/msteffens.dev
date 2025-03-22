@@ -20,7 +20,7 @@ clone:
 steps:
  - name: pull remote changes
    commands:
-    - cd /conatiners/msteffens.dev
+    - cd /containers/msteffens.dev
     - git pull
 
  - name: rebuild and restart container
