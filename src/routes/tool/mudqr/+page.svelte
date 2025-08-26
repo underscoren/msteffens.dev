@@ -8,7 +8,7 @@
         getPatternMask,
         maskFormulae,
         type BlockCharacter,
-    } from "$lib/qr/qrUtils";
+    } from "$lib/qr/utils";
     import { toByte } from "$lib/util";
 
     let qrText: string | undefined = $state();

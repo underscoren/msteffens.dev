@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { GroupColor } from "./qrUtils";
+    import type { GroupColor } from "./utils";
 
     interface Props {
         groups: string[][][];
