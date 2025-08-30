@@ -2,35 +2,25 @@
 title: "Decoding QR Codes for fun and profit"
 subhead: "trust hates him, scrape T2 with this one simple trick!"
 created: "2024-07-01"
-edited: "2024-07-01"
+edited: "2025-08-12"
 cover: "/img/qr/qr_hm.png"
-alt: "Ironically, I don't cover error correction"
+imgtitle: "Ironically, I didn't cover error correction"
 coverWidth: "421px"
 coverHeight: "306px"
 ---
 
-# QR code decoders
+<script>
+  import { onMount } from "svelte";
+  import QRSimple from "$lib/qr/QRSimple.svelte";
+  import QROverlay from "$lib/qr/QROverlay.svelte";
+  import QRAnimated from "$lib/qr/QRAnimated.svelte";
+  import { QRtextToBitArray, readQRMetadata, readQRCodewords, deinterleaveBitstream, decodeData } from "$lib/qr/decode";
+  import { allPatterns, getPatternMask } from "$lib/qr/patterns";
+  import { patternHues } from "$lib/qr/utils";
+  import { versionFromSize, versionGroupsBlocks } from "$lib/qr/data";
 
-If you've ever wanted to make your own QR Code decoder, you've probably come across [these tutorials](https://www.thonky.com/qr-code-tutorial/), and while they are fantastic, they are for encoding not decoding. Trying to use them myself I ran into numerous pitfalls, so I'll save you from bashing your head against your desk for several hours.
-
-Generally speaking, the decoding process goes like this:
-  - Read the format bits to find the error correction level and mask pattern
-  - Read and unmask the data codewords
-  - Deinterleave the data codewords
-  - Read the encoding and length information
-  - Decode the data
-
-There's a lot more involved on the error correction and image processing side, but I won't be going over those in this guide.
-
-<script lang="ts">
-    import GroupHover from "$lib/qr/GroupHover.svelte";
-    import QR from "$lib/qr/QR.svelte"
-    import { allPatterns, codewordGroups, combineMask, defaultHues, getModule, getPatternMask, groupColor, maskFormulae, type PatternName, type QRReadHistory } from "$lib/qr/qrUtils"
-    import { onMount } from "svelte"
-    import { toByte } from "$lib/util";
-
-    const qrText = `
-█▀▀▀▀▀█ █▀   ███▀ █▄█▀▀▀▄▄▀ ▄▀█▄ ▄▄▄  ▄▄█ █▀▀▀▀▀█
+  const qrText = 
+`█▀▀▀▀▀█ █▀   ███▀ █▄█▀▀▀▄▄▀ ▄▀█▄ ▄▄▄  ▄▄█ █▀▀▀▀▀█
 █ ███ █ ▀█▄▄▄  ▄█ ▄▄██▄█▄▄▀▀▄█  ▄▀▀▄▄▄ █▀ █ ███ █
 █ ▀▀▀ █ ▄█▄   ▀█▄█ ▀ ██▀▀▀█▄▀▄ ▀ ▄▄ ▀▀▄   █ ▀▀▀ █
 ▀▀▀▀▀▀▀ █ █ ▀ ▀▄▀ █▄▀ █ ▀ █▄▀ █ █▄▀ █ █▄▀ ▀▀▀▀▀▀▀
@@ -56,399 +46,183 @@ There's a lot more involved on the error correction and image processing side, b
 █ ▀▀▀ █ ▀██ ▄▄▀▀▄▀█ ▀▄█  ▄▄ ▀▀▀█▄▀▀ ▀ █▀ █▄  ▀▀▀█
 ▀▀▀▀▀▀▀   ▀▀▀▀▀▀ ▀▀ ▀▀  ▀      ▀ ▀  ▀ ▀▀   ▀  ▀▀▀`;
 
-    const QRLines = qrText.trim().split("\n") as unknown as BlockCharacter[][]; // i love typescript
-    const qrSize = QRLines[0].length;
+  const QRLines = qrText.split("\n");
+  const qrSize = QRLines[0].length;
 
+  const bitArray = QRtextToBitArray(QRLines);
 
+  /// Functional Module Visualization ///
 
-    /// Visualization ///
+  console.log("allPatterns", allPatterns);
 
+  // map of patterns to masks
+  const patternMasks = Object.fromEntries(
+    [...allPatterns, "simpleMask"].map(pattern => [pattern, getPatternMask(qrSize, pattern)])
+  );
 
+  $: highlightedPattern = undefined;
 
-    $: toVisualize = allPatterns;
+  $: overlays = allPatterns.map(
+    pattern => ({
+      pattern,
+      bitarray: patternMasks[pattern],
+      moduleOnColor: `hsl(${patternHues[pattern]}deg 100% 50% / 50%)`,
+      visible: highlightedPattern ? (highlightedPattern == pattern) : true
+    })
+  );
 
-    let finderText: HTMLSpanElement;
-    let timingText: HTMLSpanElement;
-    let alignmentText: HTMLSpanElement;
-    let versionText: HTMLSpanElement;
-    let formatText: HTMLSpanElement;
-    let darkModuleText: HTMLSpanElement;
+  /// Reading Animation ///
 
-    let textMap: Record<PatternName, HTMLSpanElement> = {};
+  // read QR code to get history
 
-    onMount(() => {
-        textMap = {
-            "finder": finderText,
-            "timing": timingText,
-            "alignment": alignmentText,
-            "version": versionText,
-            "format": formatText,
-            "darkModule": darkModuleText,
-        }
+  const meta = readQRMetadata(bitArray);
+  console.log(meta);
+  const { maskFunc, ecLevel } = meta;
 
-        for(const [name, element] of Object.entries(textMap))
-            element.style.textShadow = `0 0 10px hsl(${defaultHues[name]} 100 50)`;
-    });
+  const { bitstream, readHistory } = readQRCodewords(bitArray, maskFunc);
 
-    function setVisualize(name: string) {
-        if(!textMap[name]) return; // handle prerender error
+  // reconstruct data-only read history, and group by codeword
 
-        toVisualize = [name];
-        textMap[name].style.textShadow = `0 0 10px hsl(${defaultHues[name]} 100 60), 0 0 20px hsl(${defaultHues[name]} 100 60), 0 0 20px hsl(${defaultHues[name]} 100 60), 0 0 25px hsl(${defaultHues[name]} 100 60)`;
+  const version = versionFromSize(qrSize);
+  const groupData = versionGroupsBlocks[version][ecLevel];
+  
+  const totalDataCodewords = groupData.groups.reduce(
+    (sum, {blocks, codewords}) => sum + (blocks * codewords), 
+    0
+  );
+
+  let dataReadHistory = [];
+
+  for(let i = 0; i < totalDataCodewords; i++) {
+    // iterate through history to find 8 read modules
+    let readModules = 0;
+    while(readModules < 8) {
+      const history = readHistory.shift();
+      dataReadHistory.push({...history, codeword: i});
+
+      if(history.operation == "read") 
+        readModules += 1;
     }
-
-    function clearVisualize() {
-        let old = toVisualize[0];
-        if(!textMap[old]) return; // handle prerender error
-
-        toVisualize = allPatterns;
-
-        for(const [name, element] of Object.entries(textMap))
-            element.style.textShadow = `0 0 10px hsl(${defaultHues[name]} 100 50)`;
-    }
+  }
 
 
+  /// Group / Block Visualization ///
 
+  const { dataCodewordBlocks } = deinterleaveBitstream(bitstream, version, ecLevel);
 
-    /// QR Decoding ///
+  const dataCodewords = dataCodewordBlocks.flat(3);
 
+  const { message } = decodeData(dataCodewords);
 
-
-
-    // setup / metadata
-    
-    /** Combine all the pattern masks to produce one mask for skipping functional modules */
-    const skipMask = allPatterns
-        .map(name => getPatternMask(qrSize, name))
-        .reduce((a,b) => combineMask(a,b))
-
-    const version = ((qrSize - 21) / 4) + 1;
-
-    /** Read the format */
-
-    const formatBits = [];
-
-    for(let x = 0; x < 5; x++) 
-        formatBits.push(getModule(x, 8, QRLines));
-
-    const format = parseInt(formatBits.join(""), 2) ^ 0b10101;
-
-    const ecLevel = format >> 3;
-    const mask = format & 0b111;
-
-    const ecIndex = [1,0,3,2][ecLevel];
-    const groups = codewordGroups[version]?.[ecIndex];
-
-    /** 
-     * Calculate the total number of codewords by summing up 
-     * the blocks per group * codewords per block for each group
-     */
-    const totalDataCodewords = groups.reduce(
-        (sum, [blocks, codewords]) => sum + (blocks * codewords), 
-        0);
-    
-    const maskFormula = maskFormulae[mask];
-
-    // reading
-
-    let direction: 1 | -1 = -1; // start by going up
-
-    /**
-     * Function that reads the bit at the current coordinate, and returns 
-     * the position of the next bit to read
-     * 
-     * @param x x coord to read
-     * @param y y coord to read
-     * @returns {[number, number, number,  [number,number][]]} bit, coordinates of the next module, and skipped module coords
-     */
-    const readBit = (x: number, y: number) => {
-        // get current module and XOR with the mask
-        const bit = getModule(x, y, QRLines) ^ Number(maskFormula(x, y));
-        
-        const size = QRLines[0].length
-        const skipped = [];
-
-        // calculate the next module position to read, skipping any functional modules
-        do {
-            if (x & 1) { // left column
-                x++; // move right & vertical
-                y += direction;
-            } else { // right column
-                x--; // move left
-            }
-
-            // when we reach the top/bottom edge
-            if(y < 0 || y == size) {
-                y -= direction; // go back
-                direction *= -1; // flip reading direction
-                x -= 2; // jump to next column
-            }
-
-            // if we go OOB (x == -1), there's no more to read
-            if(x < 0)
-                break;
-            
-            skipped.push([x,y]);
-        } while (skipMask[y][x] == 1)
-
-        return [bit, x, y, skipped.slice(0,-1)] as [number, number, number, [number,number][]]; 
-    }
-
-    /** 
-     * Convenience function to read a sequential series of bits from the QR code
-     * @see readBit
-     * @returns the bit string, next coordinate to read, and history of read or skipped modules
-     */
-    const readBits = (x: number, y: number, n: number) => {
-        const bits = []
-        const history = [];
-
-        while(n-- > 0) {
-            history.push([x, y, "read"]);
-
-            let bit, skipped;
-            [bit, x, y, skipped] = readBit(x, y);
-            
-            bits.push(bit);
-            
-            if(skipped.length > 0)
-                history.push(...skipped.map(([x,y]) => [x, y, "skipped"]))
-        }
-
-        return [bits.join(""), x, y, history] as [string, number, number, QRReadHistory][];
-    }
-
-    /** Interleaved blocks as stored directly in the QR code */
-    const interleavedBlocks: string[] = [];
-    /** 
-     * QR code reading history, as an array of `[coords, read or skipped][]` 
-     * for each block and for each module inside each block
-     */
-    let readHistory: QRReadHistory[][] = [];
-
-    let i = totalDataCodewords;
-    let currentX = qrSize - 1; // start at the bottom-right corner
-    let currentY = qrSize - 1;
-
-    while(i-- > 0) {
-        let bits, history;
-        [bits, currentX, currentY, history] = readBits(currentX, currentY, 8);
-
-        interleavedBlocks.push(bits);
-        readHistory.push(history);
-    }
-
-    // deinterleaving
-
-    let currentGroup = 0;
-    let currentBlock = 0;
-
-    // 2d array of groups and blocks of codewords
-    const dataBlocks = groups.map(
-        ([blocks]) => Array.from({length: blocks}, () => new Array())
-    ) as string[][][];
-
-    /** Block deinterleaving history, as array of `[group number, block number, bits, modules]` arrays */
-    const blockHistory: [number, number, string, [number, number][]][] = [];
-
-    for(let i = 0; i < interleavedBlocks.length; i++) {
-        dataBlocks[currentGroup][currentBlock].push(interleavedBlocks[i]);
-        
-        // heep track block history
-        blockHistory.push([
-            currentGroup, 
-            currentBlock, 
-            interleavedBlocks[i], 
-            readHistory[i]
-                .filter(([x,y,state]) => state == "read") // only push read bits
-                .map(([x,y]) => [x,y]) // no need for state anymore
-        ]);
-
-        const [blocksInGroup] = groups[currentGroup];
-
-        do {
-            if(i == interleavedBlocks.length - 1)
-                break; // avoid an infinite loop at the end
-
-            currentBlock += 1;
-
-            if(currentBlock >= blocksInGroup) {
-                currentBlock = 0;
-                currentGroup += 1;
-
-                if(currentGroup >= groups.length) {
-                    currentGroup = 0;
-                }
-            }
-        } while(dataBlocks[currentGroup][currentBlock].length >= groups[currentGroup][1])
-    }
-
-    // decoding
-
-    // concatenate all deinterleaved blocks
-    const encodedData = dataBlocks.flat(3).join("");
-    
-    const encoding = parseInt(encodedData.slice(0,4), 2);
-    const length = parseInt(encodedData.slice(4,12), 2);
-
-    if(encoding != 4)
-        throw new Error("Encoding "+encoding.toString(2).padStart(4,"0")+" not supported"); // tee hee
-
-    /** Decoded text */
-    const decoded = [...encodedData.slice(12, 12+length*8).matchAll(/.{1,8}/g)]
-        .map(bits => parseInt(bits as unknown as string, 2))
-        .map(num => String.fromCharCode(num))
-        .join("")
-    
-
-
-    /// Visualization pt. 2 ///
-
-
-
-    // all patterns as red
-    const allPatternsRed = allPatterns.map(pattern => [pattern, 2]);
-
-    let n = 0;
-    /** 
-     * group colors, the byte value, and the modules 
-     * for each codeword in each block in each group 
-     */
-    const groupColors = dataBlocks.map(
-        (group, g) => group.map(
-            (block, b) => block.map(
-                (codeword, i) => ({
-                    ...groupColor(g, b, i, groups), 
-                    byte: toByte(codeword),
-                    modules: blockHistory.filter(([group, block]) => group == g && block == b)[i][3]
-                })
-            )
-        )
-    );
-
-    let hoveredGroup: {g: number, b: number, i: number} | null = null;
-    
-    let hoverVisualization: ["block", [number, number][], number][];
-
-    const concat = <T>(a: T[], b: T[]) => a.concat(b);
-    const defaultHoverVis = groupColors
-        .flat(3)
-        .map(({modules, blockHue}) => [
-            "block",
-            modules,
-            blockHue
-        ])
-        .concat(allPatternsRed)
-    
-    const groupBlockHoverVis = (group: number, block: number) => 
-        groupColors[group][block].map(({modules, blockHue}) => [
-            "block",
-            modules,
-            blockHue
-        ])
-        .concat(allPatternsRed)
-    
-    let hoverVis = defaultHoverVis;
-
-
-
-    /// Animation ///
-
-
-
-    let animatedQR: QR;
-    let animState = "paused";
-    let animSpeed = 1;
-
-    let bitString = "";
 </script>
+
+
+# QR code decoders
+
+If you've ever wanted to write your own QR code decoder, there's some excellent resources out there. Unfortunately, many of them miss out crucial information for larger QR codes. This tutorial goes into the details of decoding, and the pitfalls you might encounter.
+
+Briefly, the decoding process looks like this:
+  - Read the modules containing `format bits` to find the `error correction level` and `mask pattern`
+  - Read and unmask data modules as bits of `data codewords`
+  - Deinterleave the `data codewords`
+  - Read the `encoding bits` and `data length`
+  - Read the total message data and decode it as specified
+
+There's a lot more involved on the error correction and image processing side, but I won't be going over those in this guide.
+
 
 ## Anatomy of a QR Code
 
-Before we get to decoding, let's first understand the different parts of a QR code.
+Before we start decoding, first you must understand the different parts of a QR code.
 
 1. Modules
-   - These are the distinct black and white boxes that make up the QR code
-   - They are called modules to separate them from pixels, because in an image a module is usually made up of many pixels
-   - A module is considered "on" or 1 when it is black, and "off" or 0 when it is white
+   - Black and white boxes that make up the QR code
+   - Called modules to separate them from pixels
+   - On or 1 when it is black, Off or 0 when it is white
 
 2. Version
-   - The QR version is what defines the size of the QR code (and vice versa)
-   - `version = ((size - 21) / 4) + 1` (size being width or height in modules)
+   - Each size of QR codes is a specific version, from 1 to 40
+   - `version = ((size - 21) / 4) + 1` (size being total width or height in modules)
 
 ### Functional modules
 
-Functional modules are used for various metadata or image processing purposes.
+Functional modules are patterns in specific locations used for metadata or image processing purposes.
 
-1. Finder pattern
+1. **Finder pattern**
    - Three distinct boxes in each corner except for the bottom-left.
-   - They are 7x7 module boxes, with a 3x3 module box inside
+   - 7x7 module outer box, 3x3 module box inside
    - The 3x3 inner box has a 1 module white border around it
-   - They always have a 1 module white border around the two sides facing inwards
+   - Always have a 1 module white border around the two sides facing inwards
 
-2. Timing pattern
+2. **Timing pattern**
    - Two 1 module wide lines, alternating on/off
    - Horizontal and vertical
    - Aligned to the bottom-left corner of the top-left finder pattern
 
-3. Alignment pattern
+3. **Alignment pattern**
    - These are smaller boxes spread evenly across the QR code
    - 5x5 modules boxes with 1 module in the center
-   - Not present on smaller QR codes (`version == 1`)
+   - Not present on the smallest QR code (`version == 1`)
    - The positions are dependent on QR version
-     - And they are always in sync with the timing pattern
+     - They are always in sync with the timing pattern
 
-4. Format bits
+4. **Format bits**
    - A 15 bit string containing QR code format metadata
-   - Always wrapped around the top-left finder pattern
-   - Also to the left of the bottom-left finder pattern, and below the top-right finder pattern
+   - Two copies exist in all QR codes:
+     - Wrapped around the top-left finder pattern
+     - Below the top-right finder pattern, and right of the bottom-left finder pattern
 
-5. Dark Module
+5. **Dark Module**
    - A single module that's always on (dark)
-   - Always in the same place - aligned to the top-left corner of the bottom-left finder pattern
+   - Always in the same place - aligned to the top-right corner of the bottom-left finder pattern
 
-6. Version bits
+6. **Version bits**
    - 18 bits defining the QR version
-   - Always a 6x3 rectangle, above the bottom-left finder pattern and to the left of the top-left finder pattern
-   - Only present on large QR codes (`version > 6`)
+   - Two copies:
+    - 6x3 rectangle above the bottom-left finder pattern 
+    - 3x6 rectangle to the left of the top-right finder pattern
+   - Not present on smaller QR codes (`version < 6`)
    - 6 bit version number with 12 bits for error correction
-   - Mostly useful for error correction; QR version can be computed from the size
+   - Mostly useful for image-based readers to prevent false positive reads
 
-<QR 
-    qrText={qrText} 
-    visualize={toVisualize} 
-    on:moduleenter={({detail}) => setVisualize(detail.module.dataset.group)}
-    on:moduleleave={() => clearVisualize()}
+<QROverlay
+  width={qrSize}
+  height={qrSize}
+  QRBitArray={bitArray}
+  {overlays}
 />
 
-Tip: Hover over me, I'm interactive!
+Tip: Hover over the text, I'm interactive!
 
 <div class="columns">
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("finder")}
-        on:mouseleave={() => clearVisualize()}
-        bind:this={finderText}
+        class={"column is-4 glowy-text"}
+        class:active={highlightedPattern == "finder"}
+        style:--shadowHue={`hsl(${patternHues["finder"]}deg 100% 50%)`}
+        on:mouseenter={() => highlightedPattern = "finder"}
+        on:mouseleave={() => highlightedPattern = undefined}
         role="none"
     >
     [Finder pattern]
     </span>
     
     <span
-        class="column is-4"
-        on:mouseenter={() => setVisualize("timing")}
-        on:mouseleave={() => clearVisualize()}
-        bind:this={timingText}
+        class={"column is-4 glowy-text"}
+        class:active={highlightedPattern == "timing"}
+        style:--shadowHue={`hsl(${patternHues["timing"]}deg 100% 50%)`}
+        on:mouseenter={() => highlightedPattern = "timing"}
+        on:mouseleave={() => highlightedPattern = undefined}
         role="none"
     >
     [Timing pattern]
     </span> 
     
     <span
-        class="column is-4"
-        on:mouseenter={() => setVisualize("alignment")}
-        on:mouseleave={() => clearVisualize()}
-        bind:this={alignmentText}
+        class={"column is-4 glowy-text"}
+        class:active={highlightedPattern == "alignment"}
+        style:--shadowHue={`hsl(${patternHues["alignment"]}deg 100% 50%)`}
+        on:mouseenter={() => highlightedPattern = "alignment"}
+        on:mouseleave={() => highlightedPattern = undefined}
         role="none"
     >
     [Alignment pattern]
@@ -456,30 +230,33 @@ Tip: Hover over me, I'm interactive!
 </div>
 <div class="columns">
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("format")}
-        on:mouseleave={() => clearVisualize()}
-        bind:this={formatText}
+        class={"column is-4 glowy-text"}
+        class:active={highlightedPattern == "format"}
+        style:--shadowHue={`hsl(${patternHues["format"]}deg 100% 50%)`}
+        on:mouseenter={() => highlightedPattern = "format"}
+        on:mouseleave={() => highlightedPattern = undefined}
         role="none"
     >
     [Format bits]
     </span> 
     
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("darkModule")}
-        on:mouseleave={() => clearVisualize()}
-        bind:this={darkModuleText}
+        class={"column is-4 glowy-text"}
+        class:active={highlightedPattern == "darkModule"}
+        style:--shadowHue={`hsl(${patternHues["darkModule"]}deg 100% 50%)`}
+        on:mouseenter={() => highlightedPattern = "darkModule"}
+        on:mouseleave={() => highlightedPattern = undefined}
         role="none"
     >
     [Dark Module]
     </span> 
     
     <span 
-        class="column is-4"
-        on:mouseenter={() => setVisualize("version")}
-        on:mouseleave={() => clearVisualize()}
-        bind:this={versionText}
+        class={"column is-4 glowy-text"}
+        class:active={highlightedPattern == "version"}
+        style:--shadowHue={`hsl(${patternHues["version"]}deg 100% 50%)`}
+        on:mouseenter={() => highlightedPattern = "version"}
+        on:mouseleave={() => highlightedPattern = undefined}
         role="none"
     >
     [Version bits]
@@ -487,6 +264,25 @@ Tip: Hover over me, I'm interactive!
 </div>
 
 (The dark module is a bit hard to see, it's next to the top-right corner of the bottom-left finder pattern)
+
+## Codewords? Yeah, I program
+
+There's some confusing terminology if you're not used to it. To make sure we're all on the same page, here's a brief glossary:
+
+ - **Codeword**: A term used in data transmission and error correction. It is some data that is being used in a code system (code as in encoding, not programming code), e.g. reed-solomon error correction.
+   - **Data codeword**: A chunk of encoded data, usually part of some larger message
+   - **Error correction codeword**: A chunk of data used to detect and/or correct errors. Generated from data codewords.
+ 
+ - **Block**: An array of codewords. Has a fixed size depending on the group.
+ - **Group**: An array of blocks. Has a fixed number of blocks, and and all blocks in the same group have the same size.
+   - Provides a strict two-tier hierarchy (group -> block -> codeword)
+
+<div class="message is-info">
+    <div class="message-header"><p>Note</p></div>
+    <div class="message-body">
+        The reason for groups and blocks is to facilitate <strong>interleaving</strong> which is explained in <a href="#decoding-pt3-deinterleaving">Decoding Pt.3</a>
+    </div>
+</div>
 
 ## Text manipulation
 
@@ -521,10 +317,10 @@ const qrText = `
 ▀▀▀▀▀▀▀   ▀▀▀▀▀▀ ▀▀ ▀▀  ▀      ▀ ▀  ▀ ▀▀   ▀  ▀▀▀`;
 ```
 
-If you squint your eyes, it somewhat resembles a QR code. Your phone probably can't read it. 
+If you squint your eyes, it somewhat resembles a QR code. Your phone probably can't scan it. 
 Let's parse that text and turn it into something more useful.
 
-Given a coordinate `(x, y)`, we have to get the right character from the text. While each character in a line represents one x coordinate, each line represents two y coordinates. Therefore, we get the correct character in each line by selecting `(x, y/2)` of the text characters.
+Given a coordinate `[x, y]`, we have to get the right character from the text. While each character in a line represents one x coordinate, each line represents two modules. To get the correct row, we need to select the `(y/2)` line
 
 ```js
 // clean and split up the qr code text into lines for simpler access
@@ -535,7 +331,7 @@ const char = qrLines[Math.floor(y / 2)][x];
 
 Now for a detour about binary math. Stay with me, I promise it will be quick.
 
-The text is made up of block characters, such that two pixels are stacked vertically in one line of characters:
+The text is made up of block characters, such that two modules are stacked vertically in one line of text:
 
 ```js
 const emptyBlock = " "; // colloquially "space"
@@ -544,26 +340,26 @@ const bottomHalf = "▄";
 const fullBlock  = "█";
 ```
 
-If you rotate them 90 degrees to the right, you can think of them as a two-bit binary number
+If you rotate them 90 degrees clockwise, you can think of them as a two-bit binary number
 
 ![each block character in order, with the bit representation below](/img/qr/bits_and_bytes.png)
 
 ```js
 const blockMap = {
-    [emptyBlock]: 0b00, // 0
-    [topHalf]:    0b01, // 1
-    [bottomHalf]: 0b10, // 2
-    [fullBlock]:  0b11  // 3
+  [emptyBlock]: 0b00, // 0
+  [topHalf]:    0b01, // 1
+  [bottomHalf]: 0b10, // 2
+  [fullBlock]:  0b11  // 3
 }
 ```
 
 With this map, we can turn each character into a number, and then we "extract" the bits we want by using some bitwise operations. 
 
-So, to get the numerical value we look up the character in the map (`blockMap[char]`).
+To get the numerical value we look up the character in the map (`blockMap[char]`).
 
-This still gives us two possible modules. In order to figure out if we want the top or bottom module, we simply do `y & 1`. This returns `0` for the top, and `1` for the bottom.
+This still gives us two possible modules. In order to figure out if we want the top or bottom module, we can use the the fact that the lowest bit is `0` when even, and `1` when odd: `y & 1` produces `0` for the top, and `1` for the bottom.
 
-Conveniently, we ordered our bits such that the right-most bit corresponds to the top, and the left-most bit is the bottom. We can now bit-shift our numerical representation by the result of `y & 1`, so that the right-most bit is always the one we need.
+Conveniently, we ordered our bit-representation such that the highest bit corresponds to the top, and the lowest bit is the bottom. We can bit-shift our numerical representation by the result of `y & 1`, ensuring the correct bit is always first.
 
 ```js
 blockMap[char] >> (y & 1)
@@ -575,9 +371,9 @@ Putting it all together, we can make a function to get whatever bit we want from
 
 ```js
 const getModule = (x,y) => {
-    const char = qrLines[Math.floor(y / 2)][x];
+  const char = qrLines[Math.floor(y / 2)][x];
 
-    return (blockMap[char] >> (y & 1)) & 1;
+  return (blockMap[char] >> (y & 1)) & 1;
 }
 ```
 
@@ -585,39 +381,53 @@ Honestly, I'm not sure if these two lines of code are ugly or elegant. Both I gu
 
 By iterating over each line twice (and with some flexbox magic), we now have a clean QR code.
 
-<QR qrText={qrText} />
+<QRSimple width={qrSize} height={qrSize} QRBitArray={bitArray} />
 
 Now you can scan it with your phone. But you don't want spoilers, do you?
 
 # Decoding Pt.1: Metadata
 
-To begin decoding we have to know the QR code version, which we can calculate from the size.
+To begin decoding we have to know the QR code `version`, which we can calculate from the size.
 
 ```js
 const size = QRLines[0].length; // easier to get the width than the height
 
 const version = ((size - 21) / 4) + 1;
 ```
-You can also get it from the version bits on the larger QR codes, if you want to double-check (or perform error correction).
+You can also get it from the version bits on the larger QR codes, if you want to double-check.
 
 In our case, we have a 49x49 module QR code, which means it's version `8`.
 
-Next we need the format metadata. It's 15 bits long; The first 5 bits contain format data and the last 10 are for error correction. It's wrapped around the top-left finder pattern, or next to the bottom-left and top-right patterns. Watch out for the timing pattern and dark module!
+Next we need the format metadata. It's 15 bits long; The top 5 bits contain format data and the bottom 10 are for error correction. It's wrapped around the top-left finder pattern, or next to the bottom-left and top-right patterns. Watch out for the timing pattern and dark module!
 
 ![simplified QR code showing the order of format bits](/img/qr/formatbits.png)
 
-As we do not care about error correction we only have to read the first 5 bits, from either one. The format is then masked with these bits: `101010000010010`. Unmasking is performed by `XOR`ing the masked data with the mask.
+As we do not care about error correction we only have to read the top 5 bits, from either one. The format is then masked with these bits: `101010000010010`. Unmasking is performed by `XOR`ing the masked data with the mask.
 
 ```js
 const formatBits = [];
 
 for(let x = 0; x < 5; x++) 
-    formatBits.push(getModule(x, 8));
+  formatBits.push(getModule(x, 8));
 
 const format = parseInt(formatBits.join(""), 2) ^ 0b10101;
 ```
 
-The format contains: 
+<div class="message is-warning">
+  <div class="message-header"><p>Beware of bit order!</p></div>
+  <div class="message-body">
+    <p>All binary numbers here are written in the typical <abbr title="Most Significant Bit">MSB</abbr>-><abbr title="Least Significant Bit">LSB</abbr> format, just like other number systems.</p>
+    <p>
+      For example, 523 is 500 + 20 + 3, the 5 at the 3rd position represents 5 * 10^3.<br>
+      Similarly with a binary number 10011010, the first 1 represents 1 * 2^7, followed by 0 * 2^6, 0 * 2^5, 1 * 2^4 and so on.<br>
+      This is how binary numbers are represented by computers as well.
+    </p>
+    <p>The number on a module represents the position of the bit in the binary string. e.g. 7 is the 7th bit, 3 is the 3rd bit, etc.</p>
+    <p>Be careful in which order you read the bits in your implementation to avoid issues with converting from bits to integers.</p>
+  </div>
+</div>
+
+The 5 format bits contain: 
     - 2 bits for error correction level
     - 3 bits for the mask pattern
 
@@ -631,42 +441,42 @@ const mask = format & 0b111;
 There are 4 error correction levels, and 8 mask patterns
 
 | Level | Binary | Decimal |
-|---|----|---|
-| M | 00 | 0 |
-| L | 01 | 1 |
-| H | 10 | 2 |
-| Q | 11 | 3 |
+|-----|------|-----|
+| `M` | `00` | `0` |
+| `L` | `01` | `1` |
+| `H` | `10` | `2` |
+| `Q` | `11` | `3` |
 
-Note that the error correction levels are not in order, it should be `L -> M -> Q -> H` (from lowest to highest)
+Note that the error correction levels are not in order (from lowest to highest: `L -> M -> Q -> H`)
 
 | Mask | Binary | Formula |
-|---|-----|-------------------------------|
-| 0 | 000 | `(y + x) % 2`                 |
-| 1 | 001 | `y % 2`                       |
-| 2 | 010 | `x % 3`                       |
-| 3 | 011 | `(y + x) % 3`                 |
-| 4 | 100 | `(~~(y/2) + ~~(x/3)) % 2`     |
-| 5 | 101 | `((y*x) % 2 + (y*x) % 3)`     |
-| 6 | 110 | `((y*x) % 2 + (y*x) % 3) % 2` |
-| 7 | 111 | `((y+x) % 2 + (y*x) % 3) % 2` |
+|-----|-------|-------------------------------|
+| `0` | `000` | `(y + x) % 2`                 |
+| `1` | `001` | `y % 2`                       |
+| `2` | `010` | `x % 3`                       |
+| `3` | `011` | `(y + x) % 3`                 |
+| `4` | `100` | `(~~(y/2) + ~~(x/3)) % 2`     |
+| `5` | `101` | `((y*x) % 2 + (y*x) % 3)`     |
+| `6` | `110` | `((y*x) % 2 + (y*x) % 3) % 2` |
+| `7` | `111` | `((y+x) % 2 + (y*x) % 3) % 2` |
 
-(NB: `~~` is shorthand for `Math.floor()`)
+(NB: `~~` is equivalent to `Math.floor()` here)
 
-In our QR code the format starts with `00111`. After unmasking, that's `10010`, meaning our error correction is `10` (`2` or High) and the mask pattern is `010` (also `2` or `x % 3`).
+In our QR code the top 5 format bits are `00111`. After unmasking, that's `10010`, meaning our error correction is `10` (`2` or `H`) and the mask pattern is `010` (also `2` or `x % 3`).
 
 The mask pattern is a 2D mask applied to the data and error correction codewords before they get placed in the QR code. Mask patterns are expressed as formulas that take in the position of the module and produce cool patterns to further break up the QR code. 
 
 ![Mask patterns visualized](/img/qr/mask_patterns.png)
 
-(Yoinked from the [QR code wikipedia page](https://en.wikipedia.org/wiki/QR_code))
+(Yoinked from the [QR code wikipedia page](https://en.wikipedia.org/wiki/QR_code). Note that `i` and `j` are used instead of `x` and `y`, and some of the equations are simplified)
 
-While I'm not implementing error correction in this guide, the error correction level will be useful later.
+While we're not implementing error correction in this guide, the error correction level will be necessary for deinterleaving later.
 
 # Decoding Pt.2: Reading and Unmasking
 
 Now that we have the mask pattern, we can begin reading the data codewords in the QR code.
 
-Encoded data split into 8-bit codewords. The codewords are placed starting from the bottom-right corner tightly packed, snaking up and down, left to right. Immediately following the data codewords are the error correction codewords, similarly masked, interleaved, and snaked left to right. 
+Encoded data is split into 8 bit chunks called codewords. The codewords are placed starting from the bottom-right corner tightly packed, snaking up and down, left to right. Immediately following the data codewords are the error correction codewords, similarly masked, interleaved, and snaked left to right. 
 
 The individual bits in each codeword is placed in a zig-zag pattern, in either upwards or downwards direction.
 
@@ -676,7 +486,7 @@ If you encounter [functional modules](#functional-modules), skip over them.
 
 ![Diagram showing skipping over an alignment pattern](/img/qr/readskip.png)
 
-When you reach the top or bottom, flip the vertical reading direction and continue reading two modules to the left.
+When you reach the top or bottom, flip the vertical reading direction and continue reading in the next two-module column.
 
 ![Diagram showing vertical direction reversing](/img/qr/readflip.png)
 
@@ -696,9 +506,18 @@ While you have data to read:
     - Move two modules left
   - If you are currently on a functional module, repeat the moving logic until you aren't
 
-There is one notable exception - if you are in the 7th column (the vertical timing pattern), move one additional module to the left. However if you don't care about error correction it shouldn't matter as the data codewords don't reach that far into the QR code.
+<div class="message is-warning">
+  <div class="message-header"><p>The timing pattern attacks</p></div>
+  <div class="message-body">
+    <p>Note that this algorithm does not take into account the vertical timing pattern.</p>
+    <p>If you are in the 7th column, you must move one additional module to the left.</p>
+    <p>However if you don't care about error correction it won't matter as the data codewords don't reach that far into the QR code.</p>
+  </div>
+</div>
 
-There's are many ways that you could implement reading; Personally I came up with the "skip mask" approach.
+There's are many ways that you could implement reading; The approach I will describe is simple and intuitive, but offers room for optimization, which I encourage you to try yourself.
+
+We will construct a mask containing all the modules that are not data, 
 
 Create a square 2D array the same size as the QR code filled with `0`, and set all the locations with functional modules to `1`. This simplifies reading logic as we can easily check if the module we're on is a functional module to be skipped over.
 
@@ -713,24 +532,24 @@ We have to calculate the locations with functional modules as they are different
 
 // set a rectangular region of the skip mask
 const setRectangular = (startX, startY, endX, endY) => {
-   for(let y = startY; y < endY; y++)
-       for(let x = startX; x < endX; x++)
-           skipMask[y][x] = 1;
+  for(let y = startY; y < endY; y++)
+    for(let x = startX; x < endX; x++)
+      skipMask[y][x] = 1;
 }
 
 // set a square region of the skip mask
 const setSquare = (startX, startY, size) =>
-    setRectangular(startX, startY, startX + size, startY + size);
+  setRectangular(startX, startY, startX + size, startY + size);
 
 // the coordinate of the last module inside the QR code
 const end = size - 1;
 
 
 // finder pattern + version block
-setRectangular(end - 11, 0, size, 7);
+setRectangular(end - 10, 0, size, 7);
 
 // bottom border of qr code and format bits
-setRectangular(end - 8, 7, size, 9);
+setRectangular(end - 7, 7, size, 9);
 
 // horizontal timing pattern
 setRectangular(9, 6, end - 11, 7);
@@ -745,42 +564,47 @@ The the positions of each alignment patterns are based on a grid in sync with th
 ```js
 // an array of alignment pattern row/column positions, for each QR version
 const alignmentPatterns = [
-    // 7 elements not shown...
-    [6, 24, 42],
-    // ...
+  // 7 elements not shown...
+  [6, 24, 42],
+  // ...
 ];
 
 const patternPos = alignmentPatterns[version];
 
 // iterate through all alignment patterns to generate all permutations
 for(const x of patternPos)
-    for(const y of patternPos) {
-        // filter disallowed positions
-        if(
-            (x == 6 && y == 6) ||
-            (x == 6 && y == end - 6) ||
-            (x == end - 6 && y == 6)
-        )
-            continue;
-        
-        // the coordinates are for the center, but setSquare 
-        // starts from the top-left corner 
-        setSquare(x - 2, y - 2, 5);
-    }
+  for(const y of patternPos) {
+    // filter disallowed positions
+    if(
+      (x == 6 && y == 6) ||
+      (x == 6 && y == end - 6) ||
+      (x == end - 6 && y == 6)
+    )
+      continue;
+      
+    // the coordinates are for the center, but setSquare 
+    // starts from the top-left corner 
+    setSquare(x - 2, y - 2, 5);
+  }
 ```
 
 This will give us a rudimentary "skip mask":
 
-<QR qrText={qrText} visualize={[["simpleMask", 2]]} />
+<QROverlay 
+  width={qrSize} 
+  height={qrSize} 
+  QRBitArray={bitArray} 
+  overlays={[ {bitarray: patternMasks["simpleMask"]} ]} 
+/>
 
 
 Next, we need to get the mask function using the mask pattern from the format bits earlier in [Pt.1: Metadata](#decoding-pt1-metadata).
 
 ```js
 const maskFunctions = [
-    // ...
-    (x, y) => x % 3 == 0,
-    // ...
+  // ...
+  (x, y) => x % 3 == 0,
+  // ...
 ];
 
 const maskFunction = maskFunctions[mask]
@@ -791,70 +615,76 @@ Now we can implement the module reading logic.
 ```js
 // start by going up
 let direction = -1;
+let x = end; // message bitstream starts in the bottom-right corner
+let y = end;
 
-const readBit = (x, y) => {
-    // get current module and XOR with the mask
-    const bit = getModule(x, y) ^ maskFormula(x, y);
+const readBit = () => {
+  // get current module and XOR with the mask
+  const bit = getModule(x, y) ^ maskFormula(x, y);
 
-    // calculate the next module position to read, skipping any functional modules
-    do {
-        if (x & 1) { // left column
-            x++; // move right & vertical
-            y += direction;
-        } else { // right column
-            x--; // move left
-        }
+  // calculate the next module position to read
+  do {
+    if (x & 1) { // left column
+      x++; // move right & vertical
+      y += direction;
+    } else { // right column
+      x--; // move left
+    }
 
-        // when we reach the top/bottom edge
-        if(y < 0 || y == size) {
-            y -= direction; // go back
-            direction *= -1; // flip reading direction
-            x -= 2; // jump to next column
-        }
+    // when we reach the top/bottom edge
+    if(y < 0 || y == size) {
+      y -= direction; // go back
+      direction *= -1; // flip reading direction
+      x -= 2; // jump to next column
+    }
 
-        // if we go OOB (x == -1), there's no more to read
-        if(x < 0)
-            break;
-        
-    } while (skipMask[y][x] == 1)
+    // if we go OOB (x == -1), there's no more to read
+    if(x < 0)
+      break;
+      
+  } while (skipMask[y][x] == 1)
 
-    return [bit, x, y]; 
+  return bit; 
 }
 ```
 
 And just for good measure, a convenience function is useful too.
 
 ```js
-const readBits = (x, y, n) => {
-    const bits = [];
+const readBits = n => {
+  const bits = [];
 
-    while(n-- > 0) {
-        let bit;
-        [bit, x, y] = readBit(x, y);
-        
-        bits.push(bit);
-    }
+  for(let i = 0; i < n; i++) {
+    const bit = readBit(x, y);
+    bits.push(bit);
+  }
 
-    return [bits.join(""), x, y];
+  return bits.join("");
 }
 ```
 
-But how do we know when to stop reading? The data codewords are immediately followed by the error correction codewords without any indicator. The amount of data stored in each QR code is predefined for each version and error correction level. This is where that `ecLevel` from the format is needed. 
+# Decoding Pt.3: Deinterleaving
 
-In order to get the total number of data codewords we will need to use the group and block information. This will be explained later in the deinterleaving section, for now you can treat it as a black box.
-<span id="backtrack" ></span> 
-<!-- yeah ngl this feels pretty stupid. is there a better way? -->
+Deinterleaving is the part many decoding tutorials skip - often using QR code version 1, where no interleaving happens.
+
+## Groups, blocks, and codewords
+
+The total amount of data stored in each QR code version is fixed. Different error correction levels take up more space - the more error correction data, the smaller the message data. The message data and generated error correction data is split up into 8 bit chunks called codewords, each of which are placed into arrays called blocks, which are then organized into groups.
+
+Each group has a fixed number of blocks, and all blocks inside of a group have the same number of codewords. A QR version can have 1 or more groups, and a group can have 1 or more blocks. Different groups may have different sized blocks. You can find the full list [here](https://www.thonky.com/qr-code-tutorial/error-correction-table).
+
+With this information, we can calculate the total number of data codewords, given any `version` and `ecLevel`. All we have to do is calculate `numberOfBlocks * codewordsPerBlock` for every group, then sum up the result:
 
 ```js
 const codewordGroups = [
-    // ...
-    [ // 8
-        [[2,97]],        // L
-        [[2,38],[2,39]], // M
-        [[4,18],[2,19]], // Q
-        [[4,14],[2,15]], // H
-    ],
-    // ...
+  // ...
+  { // version 8
+    L: { groups: [{blocks: 2,  codewords: 97}] }, 
+    M: { groups: [{blocks: 2,  codewords: 38}, {blocks: 2,  codewords: 39}] }, 
+    Q: { groups: [{blocks: 4,  codewords: 18}, {blocks: 2,  codewords: 19}] }, 
+    H: { groups: [{blocks: 4,  codewords: 14}, {blocks: 2,  codewords: 15}] } 
+  },
+  // ...
 ];
 
 // the ec levels are not in order for some reason
@@ -863,74 +693,54 @@ const ecIndex = ecLevelToIndex[ecLevel];
 
 const groups = codewordGroups[version][ecIndex];
 
-let totalDataCodewords = groups.reduce(
-    (sum, [blocks, codewords]) => sum + (blocks * codewords), 0
+const totalDataCodewords = groups.reduce(
+  (sum, {blocks, codewords}) => sum + (blocks * codewords), 0
 );
 ```
+
+<div class="message is-info">
+  <div class="message-header"><p>I think you missed something, blockhead</p></div>
+  <div class="message-body">
+    We will go over groups and blocks in more detail later in the interleaving section.
+  </div>
+</div>
 
 Finally, we can read in all the data codewords by reading 8 modules at a time
 
 ```js
 const interleavedData = [];
 
-// start at the bottom-right corner
-let currentX = end;
-let currentY = end;
-
-while(totalDataCodewords-- > 0) {
-    let bits;
-    [bits, currentX, currentY] = readBits(currentX, currentY, 8);
-
-    interleavedData.push(bits);
+for(let i = 0; i < totalDataCodewords; i++) {
+  let bits = readBits(8);
+  interleavedData.push(bits);
 }
 ```
 
 It should look like this:
 
-<div class="columns">
-    <div class="column">
-        <QR 
-            qrText={qrText}
-            bind:this={animatedQR} 
-            animate={"bits"}
-            readHistory={readHistory}
-            animState={animState} 
-            animSpeed={animSpeed}
-            on:bitUpdate={ev => {
-                bitString = ev.detail.bitString;
-            }} />
-    </div>
-    <div class="column">
-        <p><code style="font-size: 0.75rem">{[...bitString.matchAll(/.{1,8}/g)].join(" ")}</code></p>
-    </div>
-</div>
+<QRAnimated width={qrSize} height={qrSize} QRBitArray={bitArray} readHistory={dataReadHistory} overlays={[{bitarray: patternMasks.simpleMask}]} />
 
+## Interleaving
 
-<div class="buttons" style="margin-bottom: 1rem">
-    <button 
-        class="button" 
-        class:is-success={animState == "paused"}
-        class:is-warning={animState == "play"}
-        on:click={() => { animState = animState == "play" ? "paused" : "play" }}
-    >{animState == "paused" ? "Play" : "Pause"}</button>
-    <button 
-        class="button is-danger"
-        on:click={() => { animatedQR.resetAnim() }}
-    >Reset</button>
+Interleaving is the process of splitting up the data and weaving it into itself in a sequential pattern to break it up and help with error correction. 
 
-    <label class="label" for="name">Speed:</label>
-    <input name="speed" type="range" min={1} max={5} step={0.1} bind:value={animSpeed}>
-</div>
+The process for interleaving is:
+ - Take the first codeword
+   - Add it in block 0 of group 0
+   - Add the next one in block 1 of group 0
+   - Add the next one in block 2 of group 0
+   - ...
+ - Once you've added one codeword in each block in the group 0, repeat the same in group 1
+   - Then group 2
+   - ...
+ - Once you've added each codeword in each block in each group, repeat the above again until you have no more codewords left
+   - Take care not to overfill a block. If you've used up all the capacity in a block, continue on to the next block that has available space.
 
-# Decoding Pt.3: Deinterleaving
-
-This part definitely threw me for a loop. Not many places explain interleaving, especially if they use smaller QR codes, as they do not interleave data at all. The most frustrating thing was that the first data codeword is always the first one interleaved, so it looks like you're reading data correctly for the first 8 bits - and then you're not. Let me show you how it really works.
-
-Interleaving is the process of splitting up the data and weaving it into itself in a sequential pattern to break it up and help with error correction. Data codewords are put into a number of blocks, which are then grouped into groups - I know, amazing terminology. Each block contains a fixed number of codewords.
-
-There are predefined number of groups, blocks, and codewords per block for every version and error correction level. You can find the full list over [here](https://www.thonky.com/qr-code-tutorial/error-correction-table). Note that again, we're not concerned with error correction codewords, so we can ignore that portion.
-
-Data codewords are placed into each block for each group sequentially. So for 15 codewords from `0` - `E` put into 2 groups with 3 blocks each:
+Here's a worked through example, using 15 codewords (represented as hex half-bytes), put into two groups: 
+ - Group 0: 
+   - 3 blocks that hold 3 codewords each, and 
+ - Group 1: 
+   - 3 blocks that hold 2 codewords each.
 
 ```js
 // data to interleave
@@ -955,165 +765,176 @@ The blocks and groups are then concatenated in order, so the final interleaved d
 ```js
 //  g0                   g1
 //  b0     b1     b2     b0   b1   b2
-  [ 0,6,C, 1,7,D, 2,8,E, 3,9, 4,A, 5,B ]
+  [ 0,6,C, 1,7,D, 2,8,E, 3,9, 4,A, 5,B ];
 ```
 
-Deinterleaving is "simply" reversing this process. As usual there's a number of ways to approach this. 
+Deinterleaving is "simply" reversing this process. 
 
-A naive approach would be to calculate the stride by summing up total number of blocks for all groups and then placing each data codeword into a buffer such that `i % codewordsPerBlock * stride + floor(i / stride)` (where `i` is the index of the interleaved data). This appears to work, however the number of codewords per block is not the same in all the groups. This leads to some characters being corrupted, though a large portion of the data will be readable.
+I'll explain using the most intuitive method, which I'm calling "binning". We will create arrays for each block in each group and iterate over the data codewords, incrementing counters for which group and block you are in. When incrementing, check if the group you are in is full - if you are, then keep incrementing the group index.
 
-One approach I came up with was "binning". Create arrays for each block in each group and iterate over the data codewords, incrementing counters for which group and block you are in. When incrementing, check if the group you are in is full - if you are, then keep incrementing the group index.
-
-First, to explain the format in which I store group and block information
+If you recall from the above section...
 ```js
 const codewordGroups = [
-    // ...
-    [ // 8
-        [[2,97]],        // L
-        [[2,38],[2,39]], // M
-        [[4,18],[2,19]], // Q
-        [[4,14],[2,15]], // H
-    ],
-    // ...
+  // ...
+  { // version 8
+    L: { groups: [{blocks: 2,  codewords: 97}] }, 
+    M: { groups: [{blocks: 2,  codewords: 38}, {blocks: 2,  codewords: 39}] }, 
+    Q: { groups: [{blocks: 4,  codewords: 18}, {blocks: 2,  codewords: 19}] }, 
+    H: { groups: [{blocks: 4,  codewords: 14}, {blocks: 2,  codewords: 15}] }
+  },
+  // ...
 ];
 ```
 
-`codewordGroups` is a 4D array. At the top level is the version.
-  - For each version there are 4 error correction arrays (in order from low to high)
-    - For every error correction level, there is at least 1 group
-      - Each group is an array with two numbers:
-        - The number of blocks in a group
-        - The number of data codewords in each block
-
-In our example, with a version `8` QR code and `H`igh error correction, we have 2 groups
- - Group 1 has 4 blocks with 14 codewords each
- - Group 2 has 2 block with 15 codewords each
+In our example, with a version `8` QR code and `H`igh error correction, we have two groups:
+ - Group 0 has `4` blocks with `14` codewords each
+ - Group 1 has `2` block with `15` codewords each
 
 This means that we have `4 * 14 + 2 * 15` = `86` data codewords in total.
 
-You should backtrack to the [reading](#backtrack) section and understand how we calculate the total number of data codewords. That's right, this tutorial has metroidvania elements!
-
-Now to implement deinterleaving:
+Now to implement binning:
 
 ```js
 let currentGroup = 0;
 let currentBlock = 0;
 
-const dataBlocks = groups.map(([blocks]) => 
-    Array.from({length: blocks}, () => new Array())
+// create an array of arrays for each block in each group to store codewords
+const dataBlocks = groups.map(({blocks}) => 
+  Array.from({length: blocks}, () => [])
 );
 
-for(let i = 0; i < interleavedBlocks.length; i++) {
-    dataBlocks[currentGroup][currentBlock].push(interleavedData[i]);
+// iterate through the interleaved data
+for(let i = 0; i < interleavedData.length; i++) {
+  // place the current codeword into the current group and block
+  const codeword = interleavedData[i];
+  dataBlocks[currentGroup][currentBlock].push(codeword);
 
-    const [blocksInGroup] = groups[currentGroup];
+  // find the next block with available space
 
-    do {
-        if(i == interleavedBlocks.length - 1)
-            break; // avoid an infinite loop at the end
+  do {
+    if(i == interleavedData.length - 1)
+      break; // if we have no more data, break to avoid an infinite loop
 
-        currentBlock += 1;
+    currentBlock += 1;
 
-        if(currentBlock >= blocksInGroup) {
-            currentBlock = 0;
-            currentGroup += 1;
+    // if we have reached past the total number of block in this group, roll over to the next
+    if(currentBlock >= groups[currentGroup].blocks) {
+      currentBlock = 0;
+      currentGroup += 1;
 
-            if(currentGroup >= groups.length) {
-                currentGroup = 0;
-            }
-        }
-    } while(dataBlocks[currentGroup][currentBlock].length >= groups[currentGroup][1])
+      // if we have reached the last group, roll over to the beginning
+      if(currentGroup >= groups.length) {
+        currentGroup = 0;
+      }
+    }
+  
+  // keep repeating while the current block is full
+  } while(dataBlocks[currentGroup][currentBlock].length >= groups[currentGroup].codewords)
 }
 ```
 
-This should work for any combination of group and block sizes, though there's definitely room to optimize if you are only targeting a few select QR versions.
+At the end of it, `dataBlocks` should look like:
 
-To give you an idea of how it should look:
+<ul>
+{#each dataCodewordBlocks as group, i}
+  <li>Group {i}:</li>
+  <ul>
+  {#each group as block, j}
+    <li>
+      Block {j}: {#each block as codeword}<code>{codeword.toString(16).padStart(2, "0")}</code> {/each}
+    </li>
+  {/each}
+  </ul>
+{/each}
+</ul>
 
-<QR qrText={qrText} visualize={hoverVis} />
-
-<GroupHover 
-    groups={dataBlocks} 
-    colors={groupColors}
-    
-    on:hoveron={ev => {const {g, b} = ev.detail; hoverVis = groupBlockHoverVis(g, b)}}
-    on:hoveroff={() => hoverVis = defaultHoverVis}
-    />
-
-<br>
-
-Tip: I'm interactive too! Hover over a block to isolate it on the QR code<br>
+(`dataBlocks` contains integer numbers, but I'm displaying them here in hexadecimal because it's more readable)
 
 Last but not least, we just concatenate all the groups and blocks in order to get our final bit string
 
 ```js
-const encodedData = dataBlocks.flat(3).join(""); // isn't ES6 nice
+const encodedData = dataBlocks.flat(3); // isn't ES6 nice
 ```
 
-Here's what that looks like in our QR code:
+Finally, we have the message data:
 
 <p>
-    {#each dataBlocks.flat(3).map(toByte) as byte, i}
-    <code style:margin-right={(i+1) % 4 == 0 ? "1rem" : ""}>{byte}</code>&emsp;
-    {#if (i+1) % 16 == 0}
-    <br>
-    {/if}
-    {/each}
+{#each dataCodewords as codeword}<code>{codeword.toString(16).padStart(2, "0")}</code>{@html "&#32;"}{/each}
 </p>
-
-(I've converted the bits to bytes for your viewing pleasure)
 
 # Decoding Pt.4: Decoding the data
 
-We're now in the final stretch. We have our raw bits hot off the QR code and carefully deinterleaved. We just need to turn those bits into something useful.
+We're now in the final stretch. We have our raw codewords hot off the QR code and carefully deinterleaved. We just need to turn those codewords into something useful.
 
-Luckily for us, it's not too hard. The first 4 bits are the encoding type, and despite what you may expect there's only 5 encoding modes:
+Luckily for us, it's not too hard. The first 4 bits are the encoding type, and despite what you may expect there's only 7 encoding modes:
 
-| Type         | Bits |
-| ------------ | ---- |
-| Numeric      | 0001 |
-| Alphanumeric | 0010 |
-| Byte         | 0100 |
-| Kanji        | 1000 |
-| ECI          | 0111 |
+| Type              | Bits             |
+| ----------------- | ---------------- |
+| Numeric           | `0001`           |
+| Alphanumeric      | `0010`           |
+| Byte              | `0100`           |
+| Kanji             | `1000`           |
+| ECI               | `0111`           |
+| Structured Append | `0011`           |
+| FNC1              | `0101` or `1001` |
 
 Most of these are self-explanatory:
-  - Numeric encodes only numbers 0-9
-  - Alphanumeric encodes only letters, numbers, and a few symbols
-  - Bytes can be any data, but usually interpreted as UTF-8 text
+  - Numeric encodes only numbers 0-9, as groups of three numbers encoded into a sequence of 10-bit integers 
+  - Alphanumeric is a small custom charset consisting of numbers, letters, and a few symbols
+  - Bytes is specifically the ISO/IEC 8859-1 charset, more commonly known as latin1, but often interpreted as UTF-8
   - Kanji uses double-byte Shift-JIS
 
-ECI is a little weird. It's not an encoding format in of itself, but rather an indicator that multiple encoding formats are used. It's quite rare, and not supported by every QR code reader. Aside from that, you can find the details for each encoding mode [here](https://www.thonky.com/qr-code-tutorial/data-encoding#step-3-encode-using-the-selected-mode). You'll most commonly encounter alphanumeric and bytes modes (maybe Kanji if you're dealing with 日本語).
+ECI, Structured Append, and FNC1 do not directly encode data, but instead signify a unique mode of operation. For example, ECI is used to signify data is encoded with a charset from the Extended Channel Information set, and Structured Append is used to chain up to 16 QR codes to form a longer message. Practically, these modes are very rare to see outside of specific or highly technical implementations.
 
-The following 8 bits are the length. The number of length bits is actually dependent on the QR size and encoding type, which you can find the reference for [here](https://www.thonky.com/qr-code-tutorial/data-encoding#versions-1-through-9). We'll just deal with bytes mode here, because it's the simplest to decode.
+Each mode has it's own decoding rules, but the most popular one is "byte" mode, so we'll focus on that. If you're curious, you can pour over the spec for the details on all of them.
+
+In bytes mode, the first 8 bits (16 if `version > 10`) immediately following the mode indicator tell us the length of the data in bytes. Again, we'll have to perform bitwise operations because the bits we're interested in lie in between the 8-bit codewords:
 
 ```js
-const encoding = parseInt(encodedData.slice(0,4), 2);
-const length = parseInt(encodedData.slice(4,12), 2);
+const mode = (encodedData[0] & 0b11110000) >> 4; // take the top 4 bits of the first codeword
+
+if(mode != 0b0100)
+  throw new Error("Unsupported encoding method"); // feel free to implement other modes yourself
+
+// take the bottom 4 bits of codeword 0, shift them up so they are now the top 4 bits, and OR them to combine with the top 4 bits  
+const length = ((encodedData[0] & 0b1111) << 4) | ((encodedData[1] & 0b11110000) >> 4);
+
 ```
 
-If you scroll up a bit and read off the first two bytes, you can see our QR code has an encoding of `4` or `0100` (bytes) and our length is `41` hex or `65` bytes total.
+If you scroll up a bit and read off the first two bytes, you can see our QR code has an encoding of `4` or `0100` (bytes) and our length is `41` hex (between the `44` and `17`) or `65` bytes total.
 
 Immediately following the encoding and length is the data itself.
 
 ```js
-const dataBitstring = encodedData.slice(12, 12+length*8);
+// decode the next length 8-bit chunks as UTF-8* characters
+let message = [];
+for(let i = 0; i < length; i++) {
+  // combine the bottom 4 bits and top 4 bits of the next two codewords
+  const topBits = (codewords[i+1] << 0xF) << 4;
+  const bottomBits = (codewords[i+2] & 0xF0) >> 4;
+  
+  const char = String.fromCharCode(topBits | bottomBits);
+  message.push(char);
+}
 
-// split up the bit string into 8-bit strings with some magical regex
-const dataBits = [...dataBitstring.matchAll(/.{1,8}/g)]; 
-
-const decoded = dataBits
-    .map(bits => parseInt(bits, 2))
-    .map(num => String.fromCharCode(num))
-    .join("")
+message = message.join("");
 ```
+(NB: Javascript strings are actually UTF-16, not UTF-8. But if you're primarily working with latin characters, you can take advantage of the intentional overlap)
 
 Finally, we have our big reveal, the secret message you've undoubtedly been dying to read:
 
 <p>
-    <code>{decoded}</code>
+  <code>{message}</code>
 </p>
 
-Oh. Not sure what that means, really. Maybe you should carry on working on t2 scraper?
+Oh. Not sure what that means, really. Maybe you should keep working on solving t2?
 
-PS: If you've been paying attention, you'll notice that we only have 65 bytes, but our qr code has 86 codewords total. If you look closely, you'll see a repeated pattern of `ec` and `11` at the end. This is actually intentional padding, used to fill up any remaining space. It's not that interesting unless you're worried about data integrity...
+PS: If you've been paying attention, you'll notice that we only have 65 bytes, but our qr code has 86 codewords total. If you look closely, you'll see a repeated pattern of `ec` and `11` at the end. This is intentional padding, used to fill up any remaining space. It's not that interesting unless you're worried about data integrity...
+
+<style lang="sass">
+.glowy-text
+  text-shadow: 0 0 10px var(--shadowHue)
+
+  &.active
+    text-shadow: 0 0 10px var(--shadowHue), 0 0 20px var(--shadowHue), 0 0 20px var(--shadowHue), 0 0 25px var(--shadowHue)
+</style>

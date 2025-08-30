@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
     import {
         getModule,
         getPatternMask,
@@ -10,101 +10,117 @@
         allPatterns,
         type Bit,
         type QRReadHistory,
-        type GroupColor,
     } from "./qrUtils";
 
     /// Inputs ///
 
-    /** QR code text string */
-    export let qrText: string;
+    interface Props {
+        /** QR code text string */
+        qrText: string;
+        /**
+         * Select which patterns / sections of the QR code to visualize, optionally
+         * with a custom hue. Special case for "block" pattern, which contains an
+         * array of module coords and a hue
+         *
+         * ```
+         * visualize = ["finder", "alignment"]
+         * visualize = ["finder", ["version", 231]]
+         * visualize = ["finder", ["block", [...], 74]]
+         * ```
+         */
+        visualize?: ([PatternName, number] | PatternName | ["block", [number, number][], number])[];
+        /** Whether or not to enable animation logic */
+        animate?: boolean;
+        animState?: "paused" | "play";
+        animSpeed?: number;
+        /** Module reading history */
+        readHistory?: QRReadHistory[][] | null;
+        /** Module size in pixels */
+        moduleSize?: number;
+        /** callback when the read animation bitstring changes */
+        bitUpdate?: (bitString: string) => any
+        /** callback when a module started being hovered */
+        moduleenter?: (target: EventTarget & HTMLDivElement) => any
+        /** callback when a module stopped being hovered */
+        moduleleave?: (target: EventTarget & HTMLDivElement) => any
+    }
 
-    /**
-     * Select which patterns / sections of the QR code to visualize, optionally
-     * with a custom hue. Special case for "block" pattern, which contains an
-     * array of module coords and a hue
-     *
-     * ```
-     * visualize = ["finder", "alignment"]
-     * visualize = ["finder", ["version", 231]]
-     * visualize = ["finder", ["block", [...], 74]]
-     * ```
-     */
-    export let visualize: (
-        | [PatternName, number]
-        | PatternName
-        | ["block", [number, number][], number]
-    )[] = [];
+    let {
+        qrText,
+        visualize = $bindable([]),
+        animate = false,
+        animState = "paused",
+        animSpeed = 1,
+        readHistory = null,
+        moduleSize = 8,
+        bitUpdate,
+        moduleenter,
+        moduleleave,
+    }: Props = $props();
 
-    /** Whether or not to enable animation logic */
-    export let animate = false;
-
-    export let animState: "paused" | "play" = "paused";
-    export let animSpeed = 1;
-
-    /** Module reading history */
-    export let readHistory: QRReadHistory[][] | null = null;
-
-    /** Module size in pixels */
-    export let moduleSize = 8;
-
-    const QRLines = qrText.trim().split("\n") as unknown as BlockCharacter[][]; // i love typescript
-    const qrSize = QRLines[0].length;
+    const QRLines = $derived(qrText.trim().split("\n") as unknown as BlockCharacter[][]); // i love typescript
+    const qrSize = $derived(QRLines[0].length);
 
     /// Visualization ///
 
     // assign each module to groups based on the pattern they belong to
-    const patternGroup = square2DArray<null | string>(qrSize, null);
+    const patternGroup = $derived.by(() => {
+        const patternGroup = square2DArray<null | string>(qrSize, null);
+
+        for (const name of allPatterns) {
+            const mask = getPatternMask(qrSize, name);
+
+            for (let y = 0; y < qrSize; y++)
+                for (let x = 0; x < qrSize; x++) if (mask[y][x] == 1) patternGroup[y][x] = name;
+        }
+
+        return patternGroup
+    });
 
     /** Module to highlight */
-    let highlightedModule: [number, number];
-    $: highlightedModule = [-1, -1];
+    let highlightedModule: [number, number] = $state([-1, -1]);
 
     /** Highlight color */
-    let highlightedColor: string;
-    $: highlightedColor = "";
+    let highlightedColor: string = $state("");
 
-    for (const name of allPatterns) {
-        const mask = getPatternMask(qrSize, name);
+    
 
-        for (let y = 0; y < qrSize; y++)
-            for (let x = 0; x < qrSize; x++) if (mask[y][x] == 1) patternGroup[y][x] = name;
-    }
+    let customHue = $derived.by(() => {
+        const customHue = square2DArray<null | number>(qrSize, null)
+        
+        visualize.forEach((opts) => {
+            let name: PatternName | "block";
+            let hue: number;
+            let coords: [number, number][] = [];
 
-    let customHue = square2DArray<null | number>(qrSize, null);
-
-    // (ab?)using reactivity to clear the hues array before processing the visualization
-    $: visualize && (customHue = square2DArray<null | number>(qrSize, null));
-
-    $: visualize.forEach((opts) => {
-        let name: PatternName | "block";
-        let hue: number;
-        let coords: [number, number][] = [];
-
-        if (typeof opts == "string") {
-            // default hue
-            name = opts;
-            hue = defaultHues[name];
-        } else {
-            if (opts[0] != "block") {
-                // custom hue
-                [name, hue] = opts;
+            if (typeof opts == "string") {
+                // default hue
+                name = opts;
+                hue = defaultHues[name];
             } else {
-                name = "block";
-                hue = opts[2];
-                coords = opts[1];
-            }
-        }
-
-        if (name == "block") {
-            for (const [x, y] of coords) customHue[y][x] = hue;
-        } else {
-            // set custom patterns for the pattern mask
-            const mask = getPatternMask(qrSize, name);
-            for (let i = 0; i < qrSize; i++)
-                for (let j = 0; j < qrSize; j++) {
-                    customHue[i][j] = mask[i][j] == 1 ? hue : customHue[i][j];
+                if (opts[0] != "block") {
+                    // custom hue
+                    [name, hue] = opts;
+                } else {
+                    name = "block";
+                    hue = opts[2];
+                    coords = opts[1];
                 }
-        }
+            }
+
+            if (name == "block") {
+                for (const [x, y] of coords) customHue[y][x] = hue;
+            } else {
+                // set custom patterns for the pattern mask
+                const mask = getPatternMask(qrSize, name);
+                for (let i = 0; i < qrSize; i++)
+                    for (let j = 0; j < qrSize; j++) {
+                        customHue[i][j] = mask[i][j] == 1 ? hue : customHue[i][j];
+                    }
+            }
+        });
+
+        return customHue;
     });
 
     const offLightness = 72;
@@ -114,8 +130,8 @@
 
     /// Animation ///
 
-    $: readTickDelay = 250 / animSpeed;
-    $: skipTickDelay = 85 / animSpeed;
+    let readTickDelay = $derived(250 / animSpeed);
+    let skipTickDelay = $derived(85 / animSpeed);
 
     /** Hue of the data codeword currently being read */
     const activeHue = 44;
@@ -150,7 +166,7 @@
             }
 
         visualize = newVisualization;
-        dispatcher("bitUpdate", { bitString });
+        bitUpdate?.(bitString);
     };
 
     // animation stuff shouldn't be prerendered
@@ -190,7 +206,7 @@
 
                 if (state == "read") {
                     bitString += getModule(x, y, QRLines);
-                    dispatcher("bitUpdate", { bitString });
+                    bitUpdate?.(bitString);
                 }
 
                 const newVisualization = [...baseVisualization];
@@ -222,8 +238,6 @@
         }
     });
 
-    /** Event dispatcher */
-    const dispatcher = createEventDispatcher();
 </script>
 
 <div
@@ -254,8 +268,8 @@
                     style:box-shadow={highlightedModule[0] == x && highlightedModule[1] == y
                         ? `0 0 15px 0 ${highlightedColor}`
                         : ""}
-                    on:mouseenter={(ev) => dispatcher("moduleenter", { module: ev.currentTarget })}
-                    on:mouseleave={(ev) => dispatcher("moduleleave", { module: ev.currentTarget })}
+                    onmouseenter={(ev) => moduleenter?.(ev.currentTarget)}
+                    onmouseleave={(ev) => moduleleave?.(ev.currentTarget)}
                     role="none"
                 ></div>
             {/each}
