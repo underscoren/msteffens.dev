@@ -409,14 +409,26 @@ export type DataMaskFunc = (x: number, y: number) => boolean
 
 /** Data mask functions */
 export const maskFunctions: DataMaskFunc[] = [
-    (x: number, y: number) => (y + x) % 2 == 0,
-    (x: number, y: number) => y % 2 == 0,
-    (x: number) => x % 3 == 0,
-    (x: number, y: number) => (y + x) % 3 == 0,
-    (x: number, y: number) => (~~(y / 2) + ~~(x / 3)) % 2 == 0, // NB: ~~ is shorthand for Math.floor
-    (x: number, y: number) => ((y * x) % 2) + ((y * x) % 3) == 0,
-    (x: number, y: number) => (((y * x) % 2) + ((y * x) % 3)) % 2 == 0,
-    (x: number, y: number) => (((y + x) % 2) + ((y * x) % 3)) % 2 == 0,
+  (x: number, y: number) => (y + x) % 2 == 0,
+  (x: number, y: number) => y % 2 == 0,
+  (x: number) => x % 3 == 0,
+  (x: number, y: number) => (y + x) % 3 == 0,
+  (x: number, y: number) => (~~(y / 2) + ~~(x / 3)) % 2 == 0, // NB: ~~ is shorthand for Math.floor
+  (x: number, y: number) => ((y * x) % 2) + ((y * x) % 3) == 0,
+  (x: number, y: number) => (((y * x) % 2) + ((y * x) % 3)) % 2 == 0,
+  (x: number, y: number) => (((y + x) % 2) + ((y * x) % 3)) % 2 == 0,
+];
+
+/** Data mask functions as strings */
+export const maskFunctionStrings: string[] = [
+  "(x, y) => (y + x) % 2 == 0",
+  "(x, y) => y % 2 == 0",
+  "(x) => x % 3 == 0",
+  "(x, y) => (y + x) % 3 == 0",
+  "(x, y) => (~~(y / 2) + ~~(x / 3)) % 2 == 0",
+  "(x, y) => ((y * x) % 2) + ((y * x) % 3) == 0",
+  "(x, y) => (((y * x) % 2) + ((y * x) % 3)) % 2 == 0",
+  "(x, y) => (((y + x) % 2) + ((y * x) % 3)) % 2 == 0",
 ];
 
 /** Calculates the QR version from the width or height in modules */

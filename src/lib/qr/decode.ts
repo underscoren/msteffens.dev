@@ -77,7 +77,9 @@ export function readQRMetadata(bitArray: BitArray2D) {
   for(let x = (end - 8); x < size; x++)
     formatBitsBR.push(bitArray[8][x]);
 
-  const format = parseInt(formatBitsTL.slice(0,5).join(""), 2) ^ 0b10101;
+  // TODO: error correction
+  const formatRaw = parseInt(formatBitsTL.slice(0,5).join(""), 2);
+  const format = formatRaw ^ 0b10101;
 
   const ecLevelNum = format >> 3;
   const maskNum = format & 0b111;
@@ -88,6 +90,7 @@ export function readQRMetadata(bitArray: BitArray2D) {
   return {
     formatBitsTL, 
     formatBitsBR, 
+    formatRaw,
     format, 
     ecLevelNum, 
     ecLevel, 

@@ -1,300 +1,211 @@
 <script lang="ts">
-    import { browser } from "$app/environment";
-    import { goto } from "$app/navigation";
-    import { page } from "$app/stores";
-    import QR from "$lib/qr/QR.svelte";
-    import {
-        allPatterns,
-        codewordGroups,
-        combineMask,
-        getModule,
-        getPatternMask,
-        maskFormulae,
-        type BlockCharacter,
-    } from "$lib/qr/qrUtils";
-    import { toByte } from "$lib/util";
+  import { maskFunctionStrings, versionFromSize, type Bit, type BitArray2D } from "$lib/qr/data";
+  import { decodeData, deinterleaveBitstream, QRtextToBitArray, readQRCodewords, readQRMetadata } from "$lib/qr/decode";
+  import { allPatterns, getPatternMask } from "$lib/qr/patterns";
+  import QrOverlay from "$lib/qr/QROverlay.svelte";
+  import { patternHues } from "$lib/qr/utils";
+  import { toBinary, toHex } from "$lib/util";
+  import Error from "../../+error.svelte";
 
-    let qrText = browser ? new URLSearchParams(window.location.search).get("qr") ?? "" : "";
+  let qrText = "";
+  $: qrError = "";
+  $: isErrored = qrError.length > 0;
+  
+  // svelte reactivity is funky, easier to make the entire decoding process as a reactive function call
+  const decode = (text: string) => {
+    // reset error state (yeah i know this is stupid)
+    qrError = "";
 
-    // sanity checks
+    if(!text || text.length == 0)
+      return;
 
-    /** Returns the unique characters in the string */
-    const uniqueChars = (text: string) => [...new Set(text.split(""))];
+    // get text lines
+    const lines = text.split("\n");
+    
+    // parse lines as bitarray of modules
+    let QRBitArray: BitArray2D;
+    try {
+      QRBitArray = QRtextToBitArray(lines);
+    } catch (error) {
+      console.error(error);
+      qrError = "Unable to parse QR text. Did you paste it correctly?";
+      return;
+    }
 
-    /** Very terrible way of checking for array equality */
-    const arraySimilarShallow = (a: string[], b: string[]) =>
-        a.length == b.length && a.reduce((state, element) => state && b.includes(element), true);
+    // calculate size and version
+    const qrSize = QRBitArray.length;
+    const version = versionFromSize(qrSize);
 
-    /** removes all elements of b that are in a */
-    const filterExisting = <T,>(a: T[], b: T[]) => a.filter((el) => !b.includes(el));
+    // compute all overlay masks
+    const patternMasks = Object.fromEntries(
+      allPatterns.map(pattern => [pattern, getPatternMask(qrSize, pattern)])
+    );
 
-    const blockChars = [" ", "▀", "▄", "█"];
-    const allowedChars = [...blockChars, "\n"];
+    const overlays = allPatterns.map(
+    pattern => ({
+      bitarray: patternMasks[pattern],
+      moduleOnColor: `hsl(${patternHues[pattern]}deg 100% 50% / 50%)`
+    })
+  );
 
-    const validateQR = (text: string) => {
-        if (text.length > 0) {
-            const qrChars = uniqueChars(qrText);
-            console.log(qrChars);
+    const {
+      formatBitsTL,
+      formatBitsBR,
+      format,
+      formatRaw,
+      ecLevelNum,
+      ecLevel,
+      maskNum,
+      maskFunc
+    } = readQRMetadata(QRBitArray);
 
-            if (!arraySimilarShallow(allowedChars, qrChars))
-                return `Invalid Characters: ${filterExisting(qrChars, blockChars).join(" ")}\nSorry, no support for error correction yet`;
-        }
+    const { bitstream } = readQRCodewords(QRBitArray, maskFunc);
 
-        return "";
-    };
+    const {
+      dataCodewordBlocks,
+      ecCodewordBlocks
+    } = deinterleaveBitstream(bitstream, version, ecLevel);
 
-    $: qrError = validateQR(qrText.trim());
+    const dataCodewords = dataCodewordBlocks.flat(3);
 
-    /// stats and debug
-
-    let qrSize: number;
-    let version: number;
-    let format: number;
-    let ecLevel: number;
-    let mask: number;
-    let groups: [number, number][];
-    let maskFormula: (x: number, y: number) => boolean;
-    let interleavedBlocks: string[];
-    let dataBlocks: string[][][];
-    let encodedData: string;
     let encoding: number;
     let length: number;
-    let decoded: string;
+    let message: string;
+    try {
+      const tmp = decodeData(dataCodewords);
+      encoding = tmp.encoding;
+      length = tmp.length;
+      message = tmp.message;
+    } catch (error) {
+      qrError = "Error decoding QR code: "+(error as Error).msg;
+      return;
+    }
 
-    /** Decode QR Code */
-    const decode = (text: string) => {
-        const qrLines = text.trim().split("\n") as unknown as BlockCharacter[][];
-        qrSize = qrLines[0].length;
+    return {
+      QRBitArray,
+      qrSize,
+      version,
+      overlays,
+      formatBitsTL,
+      formatBitsBR,
+      format,
+      formatRaw,
+      ecLevelNum,
+      ecLevel,
+      maskNum,
+      dataCodewordBlocks,
+      dataCodewords,
+      ecCodewordBlocks,
+      encoding,
+      length,
+      message
+    }
+  }
 
-        const skipMask = allPatterns
-            .map((name) => getPatternMask(qrSize, name))
-            .reduce((a, b) => combineMask(a, b));
+  $: data = decode(qrText);
 
-        version = (qrSize - 21) / 4 + 1;
-
-        const formatBits = [];
-
-        for (let x = 0; x < 5; x++) formatBits.push(getModule(x, 8, qrLines));
-
-        format = parseInt(formatBits.join(""), 2) ^ 0b10101;
-
-        ecLevel = format >> 3;
-        mask = format & 0b111;
-
-        const ecIndex = [1, 0, 3, 2][ecLevel];
-        groups = codewordGroups[version]?.[ecIndex];
-
-        const totalDataCodewords = groups.reduce(
-            (sum, [blocks, codewords]) => sum + blocks * codewords,
-            0
-        );
-
-        maskFormula = maskFormulae[mask];
-
-        let direction: 1 | -1 = -1;
-
-        const readBit = (x: number, y: number) => {
-            const bit = getModule(x, y, qrLines) ^ Number(maskFormula(x, y));
-
-            do {
-                if (x & 1) {
-                    x++;
-                    y += direction;
-                } else {
-                    x--;
-                }
-
-                if (y < 0 || y == qrSize) {
-                    y -= direction;
-                    direction *= -1;
-                    x -= 2;
-                }
-
-                if (x < 0) break;
-            } while (skipMask[y][x] == 1);
-
-            return [bit, x, y] as [number, number, number];
-        };
-
-        const readBits = (x: number, y: number, n: number) => {
-            const bits = [];
-
-            while (n-- > 0) {
-                let bit;
-                [bit, x, y] = readBit(x, y);
-
-                bits.push(bit);
-            }
-
-            return [bits.join(""), x, y] as [string, number, number];
-        };
-
-        interleavedBlocks = [];
-
-        let i = totalDataCodewords;
-        let currentX = qrSize - 1;
-        let currentY = qrSize - 1;
-
-        while (i-- > 0) {
-            let bits;
-            [bits, currentX, currentY] = readBits(currentX, currentY, 8);
-
-            interleavedBlocks.push(bits);
-        }
-
-        // deinterleaving
-
-        let currentGroup = 0;
-        let currentBlock = 0;
-
-        dataBlocks = groups.map(([blocks]) =>
-            Array.from({ length: blocks }, () => new Array())
-        ) as string[][][];
-
-        for (let i = 0; i < interleavedBlocks.length; i++) {
-            dataBlocks[currentGroup][currentBlock].push(interleavedBlocks[i]);
-
-            const [blocksInGroup] = groups[currentGroup];
-
-            do {
-                if (i == interleavedBlocks.length - 1) break; // avoid an infinite loop at the end
-
-                currentBlock += 1;
-
-                if (currentBlock >= blocksInGroup) {
-                    currentBlock = 0;
-                    currentGroup += 1;
-
-                    if (currentGroup >= groups.length) {
-                        currentGroup = 0;
-                    }
-                }
-            } while (dataBlocks[currentGroup][currentBlock].length >= groups[currentGroup][1]);
-        }
-
-        encodedData = dataBlocks.flat(3).join("");
-
-        encoding = parseInt(encodedData.slice(0, 4), 2);
-        length = parseInt(encodedData.slice(4, 12), 2);
-
-        if (encoding != 4)
-            return "Encoding " + encoding.toString(2).padStart(4, "0") + " not supported";
-        else
-            decoded = [...encodedData.slice(12, 12 + length * 8).matchAll(/.{1,8}/g)]
-                .map((bits) => parseInt(bits as unknown as string, 2))
-                .map((num) => String.fromCharCode(num))
-                .join("");
-
-        return "";
-    };
 </script>
 
 <svelte:head>
-    <title>Hackmud QR Reader| msteffens.dev</title>
+  <title>Hackmud QR Reader| msteffens.dev</title>
 
-    <meta
-        name="description"
-        content="A hackmud-style text-encoded QR decoder showing advanced debug information"
-    />
+  <meta
+    name="description"
+    content="A hackmud-style text-encoded QR decoder showing advanced debug information"
+  />
 
-    <meta property="og:title" content="Hackmud QR Reader" />
-    <meta
-        property="og:description"
-        content="A hackmud-style text-encoded QR decoder showing advanced debug information"
-    />
-    <meta property="og:author" content="_n" />
+  <meta property="og:title" content="Hackmud QR Reader" />
+  <meta
+    property="og:description"
+    content="A hackmud-style text-encoded QR decoder showing advanced debug information"
+  />
+  <meta property="og:author" content="_n" />
 
-    <meta property="og:img" content={`https://msteffens.dev/img/qr/hm_qr.png`} />
-    <meta property="og:url" content={`https://msteffens.dev/tool/mudqr`} />
+  <meta property="og:img" content={`https://msteffens.dev/img/qr/hm_qr.png`} />
+  <meta property="og:url" content={`https://msteffens.dev/tool/mudqr`} />
 
-    <meta name="twitter:card" content="summary" />
+  <meta name="twitter:card" content="summary" />
 </svelte:head>
 
-<section class="section" style="height: 100%">
-    <div class="container content">
-        <h1 class="title is-text-monospace">Hackmud QR Reader</h1>
+<section class="section">
+  <div class="container content">
+    <h1 class="title is-text-monospace">Hackmud QR Reader</h1>
 
-        <div class="columns">
-            <div class="column">
-                <textarea
-                    bind:value={qrText}
-                    class="qrinput is-text-monospace"
-                    on:input={() => {
-                        qrError = decode(qrText);
-                    }}
-                    placeholder="Paste your (clean) QR code here..."
-                ></textarea>
+    <div class="columns">
+        <div class="column">
+            <textarea
+                bind:value={qrText}
+                class="qrinput is-text-monospace"
+                placeholder="Paste your QR code text here..."
+            ></textarea>
 
-                {#if qrError.length > 0}
-                    <article class="message is-danger">
-                        <div class="message-header">
-                            <p>Parsing Error</p>
-                        </div>
-                        <div class="message-body">{qrError}</div>
-                    </article>
-                {/if}
+            {#if isErrored}
+              <article class="message is-danger">
+                <div class="message-header">
+                  <p>Error</p>
+                  <p>{qrError}</p>
+                </div>
+                <div class="message-body">{qrError}</div>
+              </article>
+            {/if}
+            {#if data}
+              <QrOverlay QRBitArray={data.QRBitArray} width={data.qrSize} height={data.qrSize} overlays={data.overlays} />
+            {/if}
+        </div>
 
-                {#if qrText.length > 0 && qrError.length == 0}
-                    <QR {qrText} visualize={allPatterns} />
-                {/if}
-            </div>
+        <div class="column">
+          {#if data && !isErrored}
+            {@const {version, qrSize, formatBitsTL, formatBitsBR, format, formatRaw, ecLevel, ecLevelNum, maskNum} = data}
+            <p>QR Version <code>{version}</code> [<code>{qrSize}</code>x<code>{qrSize}</code> modules]</p>
+            <p>
+              Top-Left format bits: <code>0b{formatBitsTL.join("")}</code><br>
+              Bottom-Left format bits: <code>0b{formatBitsBR.join("")}</code><br>
+              Format: <code>0b{toBinary(format, 5)}</code> (Masked: <code>{toBinary(formatRaw, 5)}</code>)<br>
+              Error Correction Level: <code>{ecLevel}</code> <code>0b{toBinary(ecLevelNum, 2)} = {ecLevelNum}</code><br>
+              Mask: <code>{maskNum}</code> <code>0b{toBinary(maskNum, 3)} = {maskNum}</code><br>
+              Formula: <code>{maskFunctionStrings[maskNum]}</code>
+            </p>
+            
+            <p>Interleaved data:</p>
 
-            <div class="column">
-                {#if qrText.length > 0 && qrError.length == 0}
-                    <p>QR Version {version} [{qrSize}x{qrSize} modules]</p>
-                    <p>
-                        Format bits: <code>{format.toString(2).padStart(5, "0")}</code> (Masked /
-                        Raw: <code>{(format ^ 0b10101).toString(2).padStart(5, "0")}</code>)<br />
-                        Error Correction Level: {ecLevel}
-                        <code>{ecLevel.toString(2).padStart(2, "0")}</code>
-                        - {["M", "L", "H", "Q"][ecLevel]}<br />
-                        Mask: {mask} <code>{mask.toString(2).padStart(3, "0")}</code> Formula: {maskFormulae[
-                            mask
-                        ].toString()}<br />
-                    </p>
+            {@const {dataCodewordBlocks, ecCodewordBlocks, dataCodewords} = data}
+            {#each [{kind: "Data", codewords: dataCodewordBlocks}, {kind: "Error Correction", codewords: ecCodewordBlocks}] as {kind, codewords}}
+              <p>{kind} Codewords:</p>
 
-                    <p>Interleaved data:</p>
+              <ul>
+              {#each codewords as group, g}
+                <li>Group {g} [{group.length} blocks / {group[0].length} codewords per block]
+                  <ul>
+                  {#each group as block, b}
+                    <li>
+                      Block {b}: {#each block as cw}<code>{toHex(cw)}</code>{" "}{/each}
+                    </li>
+                  {/each}
+                  </ul>
+                </li>
+              {/each}
+              </ul>
+            {/each}
 
-                    Groups:
-                    <ul style="margin-top: 0.25rem">
-                        {#each dataBlocks as group, g}
-                            <li>
-                                Group {g} [{groups[g][0]} blocks / {groups[g][1]} codewords per block]
-                                <ul>
-                                    {#each group as block, b}
-                                        <li>
-                                            Block {b}: {#each block as cw}<code>{toByte(cw)}</code
-                                                >{/each}
-                                        </li>
-                                    {/each}
-                                </ul>
-                            </li>
-                        {/each}
-                    </ul>
+            <p>
+              Deinterleaved data:<br>
+              {#each dataCodewords as cw}<code>{toHex(cw)}</code>{" "}{/each}
+            </p>
+            
+            {@const {encoding, length, message} = data}
+            <p>
+              Encoding: "Bytes" <code>0b{toBinary(encoding, 4)} = {encoding}</code><br>
+              Length: {length} bytes <code>0b{toBinary(length, 8)}</code>
+            </p>
 
-                    <p>
-                        Encoded (Deinterleaved) data:<br />
-                        {#each [...encodedData.matchAll(/.{1,8}/g)] as cw}
-                            <code>{toByte(cw)}</code>&#8203;
-                        {/each}
-                    </p>
-
-                    <p>
-                        Encoding: {encoding} <code>0b{encoding.toString(2).padStart(4, "0")}</code>
-                        <code>0x{encoding.toString(16).padStart(2, "0")}</code>
-                        - Bytes<br />
-                        Length: {length} bytes <code>0b{length.toString(2).padStart(8, "0")}</code>
-                        <code>0x{length.toString(16).padStart(2, "0")}</code>
-                    </p>
-
-                    <p>
-                        Decoded data:<br />
-                        <code>{decoded}</code>
-                    </p>
-                {/if}
-            </div>
+            <p>
+              Decoded data:<br>
+              <code>{message}</code>
+            </p>
+            {/if}
         </div>
     </div>
+  </div>
 </section>
 
 {#if qrText.length > 0 && qrError.length == 0}
