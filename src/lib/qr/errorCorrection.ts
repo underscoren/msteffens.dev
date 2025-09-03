@@ -188,7 +188,6 @@ export function correctErrata(msg: number[], syndromes: number[], errorsPos: num
       throw new Error("Could not find error magnitude")
     
     const magnitude = gfDiv(y, errLocPrime);
-    console.log({errPos: errorsPos[i], i, y, errLocPrime, magnitude})
     E[errorsPos[i]] = magnitude;
   }
   

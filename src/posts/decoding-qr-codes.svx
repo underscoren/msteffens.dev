@@ -110,7 +110,7 @@ coverHeight: "306px"
 
   const { dataCodewordBlocks } = deinterleaveBitstream(bitstream, version, ecLevel);
 
-  const dataCodewords = dataCodewordBlocks.flat(3);
+  const dataCodewords = dataCodewordBlocks.flat(3).map(bitstring => parseInt(bitstring, 2));
 
   const { message } = decodeData(dataCodewords);
 
