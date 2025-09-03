@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { page } from "$app/stores";
   import { maskFunctionStrings, versionFromSize, type Bit, type BitArray2D, type BitMaybeArray2D } from "$lib/qr/data";
   import { decodeData, deinterleaveBitstream, QRtextToBitArray, readQRCodewords, readQRMetadata } from "$lib/qr/decode";
     import { calcSyndromes, correctErrata } from "$lib/qr/errorCorrection";
@@ -6,11 +7,90 @@
   import QrOverlay from "$lib/qr/QROverlay.svelte";
   import { patternHues } from "$lib/qr/utils";
   import { toBinary, toHex } from "$lib/util";
+    import { onMount } from "svelte";
   import Error from "../../+error.svelte";
-  
+  import { Base64 } from "js-base64";
+
   let qrText = "";
   $: qrError = "";
   $: isErrored = qrError.length > 0;
+
+  const alphabet = " ▀▄█\n¡¢Á¤Ã¦§¨©ª";
+
+  /** Compresses the QR textbox text, encoded as url-safe base64 */
+  const compressQR = (qrText: string) => {
+    const textchars = new Set(qrText);
+    const alphabetSet = new Set(alphabet);
+    
+    // check if there are any characters in the text not in the alphabet
+    if(!alphabetSet.isSupersetOf(textchars))
+      return "";
+
+    const toNum = (char: string) => alphabet.indexOf(char);
+    const charNums = qrText.split("").map(toNum);
+    
+    // pack to uint8array
+    const dataByteCount = Math.ceil(charNums.length / 2);
+    const charBytes = new Uint8Array(2 + dataByteCount);
+
+    // write length as 16-bit int
+    charBytes[0] = charNums.length & 0xFF;
+    charBytes[1] = (charNums.length >> 8) & 0xFF;
+
+    // pack the values starting at byte 2
+    for (let i = 0; i < charNums.length; i += 2) {
+      const byteIndex = 2 + Math.floor(i / 2);
+      const highNibble = charNums[i] << 4; // shift to upper 4 bits
+      const lowNibble = i + 1 < charNums.length ? charNums[i + 1] : 0; // lower 4 bits (0 if odd length)
+      
+      charBytes[byteIndex] = highNibble | lowNibble;
+    }
+
+    // to base64 (url-safe)
+    const b64 = Base64.fromUint8Array(charBytes, true);
+    return b64;
+  }
+
+  /** Decompresses base64-encoded packed qr text */
+  const decompressQR = (b64: string) => {
+    const packedBytes = Base64.toUint8Array(b64);
+    
+    // unpack text
+
+    const length = packedBytes[0] | (packedBytes[1] << 8);
+
+    const expectedDataBytes = Math.ceil(length / 2);
+    const expectedTotalBytes = 2 + expectedDataBytes;
+    
+    // sanity check
+    if (packedBytes.length < expectedTotalBytes)
+      throw new Error(`packed array too short: expected ${expectedTotalBytes} bytes, got ${packed.length}`);
+    
+
+    let unpacked: number[] = [];
+
+    // Unpack the data bytes starting from index 2
+    for (let i = 2; i < 2 + expectedDataBytes; i++) {
+      const byte = packedBytes[i];
+      const highValue = (byte & 0xF0) >> 4; // upper 4 bits
+      const lowValue = byte & 0x0F;         // lower 4 bits
+
+      unpacked.push(highValue);
+      
+      // only add the second value if we haven't reached the original length
+      if (unpacked.length < length)
+        unpacked.push(lowValue);
+      
+    }
+
+    unpacked = unpacked.slice(0, length);
+
+    // convert to text using alphabet
+    const text = unpacked.map(num => alphabet[num]).join("");
+
+    return text;
+  }
+
 
   /** Converts a string of 0, 1, or ? to a hex byte, or ?? if unknown bits contained */
   const toMaybeHex = (bitstring: string) => bitstring.indexOf("?") >= 0 ? "??" : toHex(parseInt(bitstring, 2));
@@ -21,7 +101,7 @@
     qrError = "";
     
     if(!text || text.length == 0)
-    return;
+      return;
     
     // get text lines
     const lines = text.split("\n");
@@ -138,6 +218,10 @@
     }
 
     console.log("decode success: "+message);
+
+    // compress qr text and set the page hash
+    const base64QR = compressQR(text);
+    window.location.hash = base64QR;
     
     return {
       QRBitArray,
@@ -162,6 +246,16 @@
   }
   
   $: data = decode(qrText);
+
+  // load QR code from hash on page load
+  onMount(() => {
+    if(window.location.hash.length == 0)
+      return;
+
+    const qrTextFromHash = decompressQR(window.location.hash.slice(1));
+    if(qrTextFromHash)
+      qrText = qrTextFromHash;
+  });
   
 </script>
 
