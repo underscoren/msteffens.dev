@@ -1,6 +1,6 @@
 <!-- Basic QR code -->
 <script lang="ts">
-  import type { BitArray2D } from "./data";
+  import type { BitArray2D, BitMaybeArray2D } from "./data";
   import QRSimple from "./QRSimple.svelte";
 
 
@@ -9,7 +9,7 @@
     /** Height in modules */
     export let height: number
     /** Base QR code */
-    export let QRBitArray: BitArray2D
+    export let QRBitArray: BitMaybeArray2D
 
     /** [x,y] coordinate of highlighted module */
     export let highlighted: [number, number] | undefined = undefined;

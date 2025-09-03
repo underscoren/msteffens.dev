@@ -1,22 +1,39 @@
 import { 
   blockMap, 
+  corruptionCharSet, 
   ecLevelsOrdered, 
+  formatCodes, 
   maskFunctions, 
   versionGroupsBlocks, 
-  type Bit, 
-  type BitArray2D, 
-  type BlockCharacter, 
+  type Bit,
+  type BitMaybe,
+  type BitMaybeArray2D,
+  type BlockCharacter,
+  type CorruptionChar,
   type DataMaskFunc, 
   type ECLevel, 
   type GroupDef 
 } from "./data";
 import { allPatterns, combineMask, getPatternMask } from "./patterns";
 
-/** Returns the bit value of a module at a given coordinate */
-export function getModule(QRTextLines: string[], x: number, y: number) {
-  const char = QRTextLines[~~(y / 2)][x] as BlockCharacter;
+function isCorruption(char: string): char is CorruptionChar {
+  return corruptionCharSet.has(char as CorruptionChar);
+}
 
-  return ((blockMap[char] >> (y & 1)) & 1) as Bit;
+function isBlockChar(char: string): char is BlockCharacter {
+  return char in blockMap;
+}
+
+/** Returns the bit value of a module at a given coordinate */
+export function getModule(QRTextLines: string[], x: number, y: number): BitMaybe {
+  const char = QRTextLines[~~(y / 2)][x];
+
+  if(isCorruption(char))
+    return "?";
+  if(isBlockChar(char))
+    return ((blockMap[char] >> (y & 1)) & 1) as Bit;
+
+  throw new Error(`Unknown character "${char}" at [${~~(y/2)}][${x}]`);
 };
 
 export type QRReadOperation = "read" | "skipped";
@@ -34,9 +51,9 @@ export function QRtextToBitArray(QRTextLines: string[]) {
   // assuming QRTextLines does not include any leading/trailing spaces or newlines
   const size = QRTextLines[0].length;
 
-  const bitArray: BitArray2D = [];
+  const bitArray: BitMaybeArray2D = [];
   for(let y = 0; y < size; y++) {
-    const line: Bit[] = [];
+    const line: BitMaybe[] = [];
 
     for(let x = 0; x < size; x++)
       line.push(getModule(QRTextLines, x, y));
@@ -48,11 +65,11 @@ export function QRtextToBitArray(QRTextLines: string[]) {
 }
 
 /** Reads the format bits, decodes them, and returns the parsed QR code metadata */
-export function readQRMetadata(bitArray: BitArray2D) {
+export function readQRMetadata(bitArray: BitMaybeArray2D) {
   // read and decode the format
-  const formatBitsTL: Bit[] = [];
+  const formatBitsTL: BitMaybe[] = [];
 
-  for(let x = 0; x < 5; x++)
+  for(let x = 0; x < 6; x++)
     formatBitsTL.push(bitArray[8][x]);
 
   const cornerCoords = [
@@ -67,7 +84,7 @@ export function readQRMetadata(bitArray: BitArray2D) {
   for(let y = 5; y >= 0; y--)
     formatBitsTL.push(bitArray[y][8]);
 
-  const formatBitsBR: Bit[] = [];
+  const formatBitsBR: BitMaybe[] = [];
   const size = bitArray[0].length;
   const end = size - 1;
   
@@ -77,8 +94,35 @@ export function readQRMetadata(bitArray: BitArray2D) {
   for(let x = (end - 8); x < size; x++)
     formatBitsBR.push(bitArray[8][x]);
 
-  // TODO: error correction
-  const formatRaw = parseInt(formatBitsTL.slice(0,5).join(""), 2);
+  // error correction
+  let formatBits = formatBitsTL.map((bit, i) =>
+    bit == "?" ? formatBitsBR[i] : bit
+  );
+
+  if(formatBits.slice(0,5).indexOf("?") > 0) {
+
+    // still have unknown format bits, pick most similar one
+    const possible = formatCodes.filter(format => {
+      // check each bit matches, ignoring unknown bits
+      for(let i = 0; i < 15; i++) {
+        if(formatBits[i] != "?" && formatBits[i] != format[i])
+          return false;
+        
+      }
+      return true;
+    });
+
+    // if we have more than 1, there's too many errors in the format to correct
+    if(possible.length != 1)
+      throw new Error("Unable to read QR code: format contains too many errors");
+    
+    // technically you could perform BCH error correction here for better results
+    // but it's unlikely that high levels of corruption happen inside the format
+
+    formatBits = possible[0].split("") as unknown as Bit[];
+  }
+
+  const formatRaw = parseInt(formatBits.slice(0,5).join(""), 2);
   const format = formatRaw ^ 0b10101;
 
   const ecLevelNum = format >> 3;
@@ -90,6 +134,7 @@ export function readQRMetadata(bitArray: BitArray2D) {
   return {
     formatBitsTL, 
     formatBitsBR, 
+    formatBits,
     formatRaw,
     format, 
     ecLevelNum, 
@@ -102,8 +147,8 @@ export function readQRMetadata(bitArray: BitArray2D) {
 /** 
  * Reads all the data and error correction codewords
  */
-export function readQRCodewords(bitArray: BitArray2D, maskFunc?: DataMaskFunc) {
-  const bitstream: Bit[] = [];
+export function readQRCodewords(bitArray: BitMaybeArray2D, maskFunc?: DataMaskFunc) {
+  const bitstream: BitMaybe[] = [];
   const readHistory: QRReadHistory[] = [];
 
   // get mask function if necessary
@@ -125,7 +170,8 @@ export function readQRCodewords(bitArray: BitArray2D, maskFunc?: DataMaskFunc) {
 
   while(!finished) {
     // get current module and XOR with the mask
-    const bit = (bitArray[y][x] ^ Number(maskFunc(x, y))) as Bit;
+    const module = bitArray[y][x];
+    const bit = module == "?" ? "?" : (module ^ Number(maskFunc(x, y))) as BitMaybe;
     bitstream.push(bit);
     
     // the current module is read, any following are skipped
@@ -167,14 +213,13 @@ export function readQRCodewords(bitArray: BitArray2D, maskFunc?: DataMaskFunc) {
   }
 
   return { bitstream, readHistory };
-
 }
 
 /** 
  * Takes in the QR message data bitstream and split it into data and error 
  * correction codewords, as well as deinterleaving them
  */
-export function deinterleaveBitstream(bitstream: Bit[], version: number, ecLevel: ECLevel) {
+export function deinterleaveBitstream(bitstream: BitMaybe[], version: number, ecLevel: ECLevel) {
   // split the bitstream into data and error correction codewords
 
   // calculate total number of codewords to read
@@ -190,23 +235,25 @@ export function deinterleaveBitstream(bitstream: Bit[], version: number, ecLevel
     0
   )
 
-  // group 8 bits into bytes
-  const groupBits = (bits: Bit[], offset: number, lengthBytes: number) => {
+  // group 8 bits into codewords
+  const groupBits = (bits: BitMaybe[], offset: number, lengthBytes: number) => {
     const bitOffset = offset * 8;
-    let bytes: number[] = [];
-    let byte = 0;
+    const codewords: string[] = [];
+    let codeword: string[] = [];
     for(let i = 0; i <= (lengthBytes*8); i++) {
       if(i != 0 && i % 8 == 0) {
-        bytes.push(byte)
-        byte = 0;
+        codewords.push(codeword.join(""))
+        codeword = [];
       }
+
+      if(i == (lengthBytes*8))
+        break; // no more bits left
       
       const bit = bits[i+bitOffset];
-      const bitPos = 7 - (i % 8);
-      byte |= bit << bitPos;
+      codeword.push(bit.toString());
     }
 
-    return bytes;
+    return codewords;
   }
 
   const dataInterleaved = groupBits(bitstream, 0, totalDataCodewords);
@@ -214,9 +261,9 @@ export function deinterleaveBitstream(bitstream: Bit[], version: number, ecLevel
   
   // deinterleave each set of blocks
 
-  const deinterleave = (codewords: number[], groups: GroupDef[]) => {
+  const deinterleave = (codewords: string[], groups: GroupDef[]) => {
     // setup group and block arrays
-    const data: number[][][] = groups.map(({blocks}) => 
+    const data: string[][][] = groups.map(({blocks}) => 
       Array.from({length: blocks}, () => [])
     );
 

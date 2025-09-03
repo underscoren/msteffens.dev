@@ -1,6 +1,6 @@
 <!-- Basic QR code -->
 <script lang="ts">
-  import type { BitArray2D } from "./data";
+  import type { BitMaybeArray2D } from "./data";
 
   
     /** Width in modules */
@@ -8,7 +8,7 @@
     /** Height in modules */
     export let height: number
     /** 2D Array for each module in the QR code*/
-    export let QRBitArray: BitArray2D
+    export let QRBitArray: BitMaybeArray2D
     
     /** Size of modules in pixels */
     export let moduleSizePx = 10;
@@ -53,6 +53,7 @@
         <div
           class="module"
           class:on={bit == 1}
+          class:unknown={bit == "?"}
           class:highlighted={isHighlighted}
           style:--highlightColor={isHighlighted ? highlightedColor : undefined}
           on:mouseenter={() => onModuleEnter?.(x,y)}
@@ -67,7 +68,7 @@
 .qr-container
   display: block
   box-sizing: content-box
-  margin: 1rem 0
+  margin: 0
   padding: 1rem
   background-color: var(--bgColor)
   width: calc(var(--widthModules) * var(--moduleSize))
@@ -91,6 +92,9 @@
 
     &.on
       background-color: var(--moduleOnColor)
+    
+    &.unknown
+      background: radial-gradient(circle, var(--moduleOnColor) 50%, var(--moduleOffColor) 50%, var(--moduleOffColor) 100%)
     
     &.highlighted
       border: solid 2px
