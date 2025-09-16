@@ -500,6 +500,6 @@ antilog(343) \\[1em]
 = 127
 $$
 
-NB: $antilog(343) = antilog(87)$, because the powers of $\alpha$ loops on modulo $255$.
+NB: $antilog(343) = antilog(88)$, because the powers of $\alpha$ loops on modulo $255$.
 
 With that, we have covered the math fundamentals required for Reed-Solomon. You might need to go over it a few times before you grok it, feel free to come back if you're confused. Otherwise carry on to Part 2 (TBC)
