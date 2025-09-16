@@ -2,7 +2,7 @@
 title: "Decoding QR Codes for fun and profit"
 subhead: "trust hates him, scrape T2 with this one simple trick!"
 created: "2024-07-01"
-edited: "2025-08-12"
+edited: "2025-08-30"
 cover: "/img/qr/qr_hm.png"
 imgtitle: "Ironically, I didn't cover error correction"
 coverWidth: "421px"

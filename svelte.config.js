@@ -4,6 +4,8 @@ import { mdsvex } from "mdsvex";
 import remarkCodeTitles from "remark-flexible-code-titles";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeSlug from "rehype-slug";
+import remarkMath from "remark-math";
+import rehypeKatexSvelte from "rehype-katex-svelte";
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -14,8 +16,12 @@ const config = {
     preprocess: [
         vitePreprocess(),
         mdsvex({
-            remarkPlugins: [remarkCodeTitles],
-            rehypePlugins: [rehypeSlug, [rehypeAutolinkHeadings, { behavior: "wrap" }]],
+            remarkPlugins: [remarkCodeTitles, remarkMath],
+            rehypePlugins: [
+                rehypeSlug, 
+                [rehypeAutolinkHeadings, { behavior: "wrap" }],
+                rehypeKatexSvelte
+            ],
         }),
     ],
 

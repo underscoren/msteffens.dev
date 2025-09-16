@@ -1,0 +1,505 @@
+---
+title: "QR Code Error Correction for Programmers"
+subhead: "Part 1: Math fundamentals"
+created: "2025-09-16"
+edited: "2025-09-16"
+cover: "/img/ec1/pt1.png"
+imgtitle: "It definitely didn't take me a year to figure out"
+coverWidth: "500px"
+coverHeight: "500px"
+---
+
+# QR Code Error Correction for Programmers
+
+Error correction is often obscured behind high-level abstract mathematics, and for good reason. It's a complicated subject, and there are many approaches for different types of situations. I'm not aiming to cover all of error correction in depth, just the basics necessary for QR code decoders.
+
+QR codes have various mechanics for error correction, the biggest of which is Reed-Solomon error correcting codes. These are specially created numbers that, even if we are missing some of them, or some of them are wrong, we can detect and correct the mistakes (as long as there aren't too many).
+
+In this first part, we will go over the math fundamentals. If you're already well versed in finite field arithmetic, feel free to skip to the next part where we focus on Reed-Solomon. This tutorial is aimed towards programmers at a relatively basic math level, so I'm assuming you have a decent grasp on algebra, and not much else. If you don't, there are plenty of great resources online, like [Khan Academy](https://www.youtube.com/watch?v=vDqOoI-4Z6M&list=PL7AF1C14AF1B05894).
+
+# Overview of Reed-Solomon
+
+Reed-Solomon error correction is a systematic, maximum distance separable code using symbols represented as polynomials with finite field coefficients. Unless you understand coding theory, that sentence probably means nothing to you.
+
+Let's start with this idea: When we represent data as equations, we can solve for unknowns.
+
+Say you have two numbers $4$ and $3$ and you'd like some way to correct for errors.
+
+You can setup an equation like $y = 4x+3$. Let's pick three points on that line: $(-1, -1), (0, 3), (1, 7)$
+
+<img class="figure" src="/img/ec1/eq1.png">
+
+Now, if something happens and you only have two of three points $(-1, -1), (?, ?), (1, 7)$
+
+<img class="figure" src="/img/ec1/eq2.png">
+
+We can still work out what the original equation is:
+
+$$
+\begin{split}
+x &= -1, y = -1 \\[0.5em]
+x &= \phantom{-}1, y = 7
+\end{split}
+$$
+
+We know the equation is in the form:
+$$
+y = mx + c 
+$$
+
+So we can substitute the values and solve the system of equations:
+$$
+-1 = m(-1) + c \\[0.5em]
+7 = m(1) + c
+$$
+
+Using
+$$
+7 - m = c
+$$
+
+We substitute $c$ with $7-m$ in the other equation:
+$$
+-1 = -m + (7 - m) \\
+-1 = 7 - 2m \\
+8 = 2m \\
+m = 4 
+$$
+
+Now it's a matter of substituting $m$ with $4$
+$$
+7 = 4 \times 1 + c \\
+7 - 4 = c \\
+c = 3
+$$
+
+So we have worked out both $m$ and $c$
+$$
+y = mc + c \\
+y = 4x + 3
+$$
+
+Just like that, we have a rudimentary form of error correction. 
+
+If we have two numbers, we can make an equation out of it. Then, we calculate some points on the equation. Given three points, we can work out what those two numbers were, even if one of the points is unknown. 
+
+This is called <strong>erasure correction</strong> because we know where the error happened.
+
+But what if we don't know the position?
+
+Let's say you have these three points: $(1,7), (0, 1), (-1, -1)$
+
+<img class="figure" src="/img/ec1/eq3.png">
+
+As you can see, there are three possible lines we can form from these points. With our current setup, we can <strong>detect</strong> one error, but we cannot correct it if we do not know the position. 
+
+If we have four points, the error becomes obvious:
+
+<img class="figure" src="/img/ec1/eq4.png">
+
+It looks like we need two extra points to correct each error, but only one extra to correct an erasure. If we only have one extra point, we can still detect an error even if we can't correct it.
+
+Reed-Solomon uses a similar concept, but with a more nuanced approach - instead of using regular numbers, we use a Galois Field. This is so that data can be represented more efficiently. In a real scenario, QR codes can store thousands of bytes. Trying to form systems of equations with thousands of coefficients would get out of hand very quickly. Galois Fields are a unique number system that solves this issue, as well as enable efficient ways to solve equations.
+
+# Galois Fields
+
+Galois Fields, or Finite Fields as the more technical name, are a field of numbers with a limited set of numbers. They are referred to using $GF(n)$ where $n$ is some whole number.
+
+You might be familiar with several fields of numbers: 
+ - $\mathbb{I}$ the field of integers: $-42, 7, 592, ...$
+ - $\mathbb{R}$ the field of real numbers: $3.1415, 0.00000001, -1234.5678, ...$
+ - perhaps even $\mathbb{C}$ the field of complex numbers: $(2 + 3i), (-1 + 4i), (-7 -3i)$
+
+These are all infinite fields. That means whenever you add two positive numbers together, you will always get a bigger number.
+
+$$
+0 + 1 = 1 \\
+1 + 1 = 2 \\
+1 + 2 = 3 \\
+1 + 3 = 4 \\
+...
+$$
+
+and so on, infinitely.
+
+Galois Fields are finite fields - the possible numbers you can use is limited. 
+
+For example, in $GF(3)$, there are only three numbers: $0$, $1$, and $2$. All operations (addition, subtraction, multiplication, division) will result in one of those three numbers.
+
+e.g.:
+
+$$
+0 + 1 = 1 \\
+1 + 1 = 2 \\
+2 + 1 = 0
+$$
+
+Similarly,
+
+$$
+0 - 1 = 2 \\
+1 - 1 = 0 \\
+2 - 1 = 1
+$$
+
+This looks like regular arithmetic except you modulo the result by the Galois Field number. In QR codes, we will be using two particular Galois Fields: $GF(2)$ and $GF(256)$
+
+## Galois Field 2
+
+$GF(2)$ has some unique properties that are convenient for implementing in software. In $GF(2)$, there are only two numbers: $0$ and $1$. This means we can represent a $GF(2)$ number as a single bit.
+
+Operations in $GF(2)$ have convenient overlaps with binary. Take addition, for example:
+
+$$
+0 + 0 = 0 \\
+0 + 1 = 1 \\
+1 + 0 = 1 \\
+1 + 1 = 0
+$$
+
+If you know your truth tables, this should remind you of `exclusive or`, or `XOR`.
+
+But what about subtraction?
+
+$$
+0 - 0 = 0 \\
+0 - 1 = 1 \\
+1 - 0 = 1 \\
+1 - 1 = 0
+$$
+
+Both addition and subtraction are the same in $GF(2)$.
+
+Multiplication is different however:
+
+$$
+0 \times 0 = 0 \\
+0 \times 1 = 0 \\
+1 \times 0 = 0 \\
+1 \times 1 = 1
+$$
+
+But is just as easily represented with `AND`.
+
+Division is even more strange:
+
+$$
+\frac{0}{0} = undefined \\[0.5em]
+\frac{1}{0} = undefined \\[0.5em]
+\frac{0}{1} = 0 \\[0.5em]
+\frac{1}{1} = 1
+$$
+
+We can only divide by 1, since we cannot divide by 0. And so, division has no effect in $GF(2)$
+
+But QR code Reed-Solomon does not use $GF(2)$, instead it uses $GF(256)$.
+
+## Galois Field 256
+
+Simple Galois Fields can only be prime numbers, because otherwise you end up with broken math rules. For example, if $a \times b = 0$ that must mean $a = 0$ or $b = 0$ (or both).
+
+This is fine in e.g. $GF(3)$, since 
+$$
+2 \times 3 = 6 \\[1em]
+6 ~ \% ~ 3 = 0 \\
+3 ~ \% ~ 3 = 0 \\[1em]
+2 \times 0 = 0
+$$
+
+so the rule holds up. 
+
+But if you tried to make a $GF(6)$ then you end up with 
+
+$$
+2 \times 3 = 6 \\
+6 ~ \% ~ 6 = 0 \\[1em]
+2 \times 3 = 0
+$$ 
+
+which would mean that either $2 = 0$ or $3 = 0$, which can't be possible.
+
+So then how is $GF(256)$ possible? There is another type of Galois Field, which is in the form $n^p$ where $n$ is a prime number. Instead of using simple modulo arithmetic, numbers are represented as polynomials of degree $p-1$ with coefficients in $GF(n)$
+
+<div class="message is-warning">
+  <div class="message-header">Glossary detour</div>
+  <div class="message-body">
+    <p>In case you're not familiar with the maths language, here's a brief overview:</p>
+    <p>
+      <strong>Polynomial</strong>:<br>
+      An expression of unknowns, usually represented with <code>x</code>.<br>
+      For example, <code>3x^2 + 5x + 4</code>
+    </p>
+    <p>
+      <strong>Term</strong>:<br>
+      A part of a polynomial, like <code>3x^2</code>.<br>
+      Includes both the coefficient and power of <code>x</code>.
+    </p>
+    <p>
+      <strong>Coefficient</strong>:<br>
+      The number multiplying the <code>x</code> term.<br>
+      In <code>3x^2</code> the coefficient is <code>3</code>.
+    </p>
+    <p>
+      <strong>Power</strong> of x:<br>
+      The power the <code>x</code> is raised to in a term.<br>
+      In <code>3x^2</code> the power is <code>2</code>.
+    </p>
+    <p>
+      <strong>Degree</strong> of polynomial:<br>
+      The highest power in a polynomial.<br>
+      The degree of <code>3x^2 + 5x + 4</code> is <code>2</code> since the highest power of <code>x</code> is <code>x^2</code>.
+    </p>
+  </div>
+</div>
+
+$2^8 = 256$, meaning that $GF(256)$ is the same as $GF(2^8)$. We can represent numbers as polynomials of degree $7$ with coefficients in $GF(2)$.
+
+This is useful because when we represent $GF(2^8)$ numbers as an 8-bit unsigned integers, each bit in the number corresponds to a term in the polynomial representation.
+
+$$
+x^7 + x^4 + x^3 + 1 \\[0.75em]
+= \phantom{1}x^7 \phantom{ + 0x^6 + 0x^5} + \phantom{1}x^4 + \phantom{1}x^3 \phantom{ + 0x^2 + 0x} + 1 \\[0.75em]
+= 1x^7 + 0x^6 + 0x^5 + 1x^4 + 1x^3 + 0x^2 + 0x + 1
+$$
+
+```js
+= 0b10011001
+= 0x99
+= 153
+```
+
+Conveniently, addition and subtraction in $GF(2^8)$ can be implemented in the same way was in $GF(2)$
+
+Say we want to $153 + 212$. In binary, this looks like:
+
+```js
+  153 = 0b10011001 
++ 212 = 0b11010100
+```
+
+In polynomial representation, this looks like:
+
+$$
+\phantom{+} x^7 + x^4 + x^3 + 1 \\[0.5em]
++ x^7 + x^6 + x^4 + x^2
+$$
+
+The actual operation we perform is
+
+```js
+     0b10011001
+   ^ 0b11010100
+     ----------
+   = 0b01001101
+```
+
+Which equals
+
+$$
+ = x^6 + x^3 + x^2 + 1 \\
+ = 77
+$$
+
+`XOR` is performed bit-wise, so with one instruction we are `XOR`ing ( $GF(2)$ -adding) each term in our polynomial representation.
+
+Multiplication and division works using polynomial math. However, software implementations use a trick with logarithms to make computation quicker and easier.
+
+### Log rules
+
+You might be familiar with rules for logarithms , but let's quickly brush up on them.
+
+The `log` function does the opposite of the `b^i` power operation for a given base `b`:
+
+$$
+log_b(b ^ i) = i
+$$
+
+e.g.
+
+$$
+2^3 = 8 \\[0.5em]
+log_2(8) = 3
+$$
+
+Often the base isn't written, especially if the base can be inferred from the context.
+
+There are a handful of log rules, but the two most useful for us are:
+
+$$
+log(a) + log(b) = log(a \times b) \\[0.75em]
+log(a) - log(b) = log(\frac{a}{b})
+$$
+
+There is also the `antilog`, which performs the opposite of a `log`:
+
+$$
+antilog_b(i) = b^i
+$$
+
+The `log` function is already doing the opposite of a power, so the `antilog` is another way of raising to a power. It's just easier use `antilog`s so we don't have to specify the base.
+
+With these log rules, we can now define multiplication and division:
+
+$$
+a \times b = antilog(log(a) + log(b)) \\[0.75em]
+\frac{a}{b} = antilog(log(a) - log(b))
+$$
+
+<div class="message is-warning">
+  <div class="message-header">Arithmetic confusion</div>
+  <div class="message-body">
+    Note that the addition and subtraction here are normal arithmetic, not <code>XOR</code>. We are performing those operations on logs, not on Galois Field numbers.
+  </div>
+</div>
+
+But this leaves us with a different problem. How do we get the `log` of a $GF$ number? 
+
+### Generator Element
+
+All Galois Fields have a special number called the "generator number" or "generator element". Every number in a Galois Field can be produced by raising the generator element to a power (apart from $0$). In math texts, the generator element is usually given the symbol $\alpha$ (alpha).
+
+The math explanation sounds a bit abstract, but it becomes easy to grasp once you see it in use.
+
+In $GF(2^8)$ the generator element is $2$, or $x$ in polynomial representation.
+
+$$
+antilog(0) = \alpha^0 = x^0 = \phantom{00}1  = 0b00000001
+$$
+
+Things are getting a bit convoluted here, and there's a lot of representations to keep track of. Let's go through them one by one.
+
+
+$antilog(0) = \alpha^0$, we know this because the base of the antilog is $2$, and $\alpha = 2$. In polynomial representation, that's equivalent to $x^0$, which is $1$. As an 8-bit binary number, it's the first bit: `0b00000001`.
+
+In order to find the next power of $\alpha$, we need to multiply the previous element by $\alpha$. We know that $\alpha = 2$, so this is equivalent to multiplying the previous number by $2$. 
+
+$$
+antilog(1) = \alpha^1 = x^{\phantom{1}} = \phantom{00}2  = 0b00000010 \\
+antilog(2) = \alpha^2 = x^2 = \phantom{00}4  = 0b00000100 \\
+antilog(3) = \alpha^3 = x^3 = \phantom{00}8  = 0b00001000 \\
+antilog(4) = \alpha^4 = x^4 = \phantom{0}16  = 0b00010000 \\
+antilog(5) = \alpha^5 = x^5 = \phantom{0}32  = 0b00100000 \\
+antilog(6) = \alpha^6 = x^6 = \phantom{0}64  = 0b01000000 \\
+antilog(7) = \alpha^7 = x^7 = 128 = 0b10000000 \\
+$$
+
+If you pay close attention, you might notice that this is also equivalent to a Left Bit Shift `<<` in binary, or multiplying by $x$ in the polynomial representation.
+
+We keep multiplying the previous number by $2$ to get the next. But once we reach $128 \times 2$, we have another problem. The largest number in $GF(256)$ is $255$, and $256 > 255$. What happens we produce a result outside $GF(2^8)$?
+
+$$
+antilog(8) = \alpha^8 = ?
+$$
+
+## Prime polynomial
+
+The third and final Galois Field concept you need to understand is the prime polynomial. Just like a prime number, a prime polynomial cannot be reduced. There are actually many prime polynomials for any Galois Field (in $GF(2^8)$ there are 30).
+
+In QR codes, the spec tells us to use the prime polynomial $x^8 + x^4 + x^3 + x^2 + 1$. It is often represented in code as `0x11D`. The math behind prime polynomials is complex, and not strictly necessary to understand for implementing error correction, so we will gloss over it here.
+
+For our purposes, the prime polynomial has the same purpose the Galois Field number - when we produce a number outside the field, in polynomial representation we use the remainder after dividing by the prime polynomial (the modulo operation).
+
+Dividing polynomials sounds tricky, but it's very similar to long division with regular numbers. We're in luck though, because we technically don't have to do it.
+
+In our case, we have to find the remainder of:
+
+$$
+\frac{x^8}{x^8 + x^4 + x^3 + x^2 + 1}
+$$
+
+which looks like
+
+<!-- this is a real mess, manually spacing things in latex is a nightmare -->
+
+$$
+\begin{array}{r}
+1 \phantom{x^8 + x^4 + x^3 + x^2 + 1}  \\[0.3em]
+x^8 + x^4 + x^3 + x^2 + 1 {\overline{\smash{\big)}\,x^{8} \phantom{x^8 + x^4 + x^3 + x^2 +)}}}  \\[0.3em]
+-\underline{(x^8 + x^4 + x^3 + x^2 + 1)} \\[0.3em]
+x^4 + x^3 + x^2 + 1 \phantom{)}
+\end{array}
+$$
+
+Without going into too much detail, notice that both polynomials have the same leading term: $x^8$. This will always be the case in our scenario where we multiply the previous value by $2$, and the result is $> 255$. So all we have to do in order to get the remainder is to subtract the prime polynomial.
+
+In binary:
+
+```js
+             00000001
+          ___________
+100011101 ) 100000000
+          ^ 100011101
+            ---------
+             00011101
+```
+
+Remember that subtraction in $GF(2)$ and $GF(2^8)$ is equivalent to `XOR` in binary.
+
+And now we know that in $GF(2^8)$, $128 \times 2 = 29$. What a world we live in.
+
+With that out of the way, we can continue with our antilog table.
+
+$$
+antilog(8) \phantom{0} = \alpha^{8\phantom{0}}  = x^4 + x^3 + x^2 + 1^{\phantom{2}} = \phantom{0} 29 = 0b00011101 \\[0.3em]
+antilog(9) \phantom{0} = \alpha^{9\phantom{0}}  = x^5 + x^4 + x^3 + x^{\phantom{2}} = \phantom{0} 58 = 0b00111010 \\[0.3em]
+antilog(10) = \alpha^{10}  = x^6 + x^5 + x^4 + x^2 = 116 = 0b01110100  \\[0.3em]
+...
+$$
+
+Keep multiplying the previous entry by $2$, and once you produce a number $> 255$ you subtract (`XOR`) the prime polynomial to get the remainder. After calculating each `antilog` from `0` to `255`, we can calculate all the `log`s using some more log rules:
+
+$$
+log(\alpha^i) = i \\
+antilog(i) = \alpha^i \\[1em]
+log(antilog(i)) = i
+$$
+
+Put simply:
+
+$$
+log(antilog(0)) = 0 \\
+log(antilog(1)) = 1 \\
+log(antilog(2)) = 2 \\
+log(antilog(3)) = 3 \\
+log(antilog(4)) = 4 \\
+log(antilog(5)) = 5 \\
+...
+$$
+
+# Recap & Conclusion
+
+That was quite a lot of sub-problems we had to solve, so let's take it from the top:
+
+We learned that QR codes use Reed-Solomon error correction, which encodes data as an equation we can solve.
+
+Then we learned about Galois Fields, which have a finite set of numbers, and use modulo arithmetic to keep the results of operations within the field.
+There are only two Galois Fields we are interested in: 
+
+$GF(2)$, which only has the numbers $0$ or $1$, much like a bit. Due to overlaps in the modulo arithmetic and bitwise operations, addition and subtraction can be performed with `XOR`. 
+
+$GF(256)$ is a special Galois Field in the form of $GF(2^8)$. These Galois Fields cannot be represented with regular modulo arithmetic, and instead use polynomials of degree $7$ with coefficients in $GF(2)$. Conveniently, due to overlaps in polynomial and binary representation, we can still perform addition and subtraction using `XOR`.
+
+Multiplication and division in $GF(2^8)$ requires complicated polynomial math, but we can simplify it using logarithms instead. 
+
+Each Galois Field has a "generator element" which when raised to each power can produce every number in the field apart from 0. 
+We can calculate all the antilogs of the generator element by raising the generator element to all the powers from `0` to `255` (effectively, starting at 1 and multiplying the previous by $2$, or using left bit shifts).
+
+If we produce a number greater than $255$, we have to modulo by the prime polynomial $x^8 + x^4 + x^3 + x^2 + 1$. In our case where we are producing the antilog table, we can simplify the modulo operation to a single subtraction (`XOR`) of the prime polynomial.
+
+We can then calculate the logs from the antilog using $log(antilog(i)) = i$
+
+Finally, to multiply two $GF(2^8)$ numbers, we can use the equation $a \times b = antilog(log(a) + log(b))$, and to divide $\frac{a}{b} = antilog(log(a) - log(b))$
+
+For example:
+
+$$
+28 \times 84 \\
+antilog(log(28) + log(84)) \\
+antilog(200 + 143) \\
+antilog(343 ~ \% ~ 256) \\
+antilog(87) \\[1em]
+= 127
+$$
+
+
+With that, we have covered the math fundamentals required for Reed-Solomon. You might need to go over it a few times before you grok it, feel free to come back if you're confused. Otherwise carry on to Part 2 (TBC)
