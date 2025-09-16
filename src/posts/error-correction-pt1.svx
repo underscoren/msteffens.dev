@@ -6,7 +6,7 @@ edited: "2025-09-16"
 cover: "/img/ec1/pt1.png"
 imgtitle: "It definitely didn't take me a year to figure out"
 coverWidth: "500px"
-coverHeight: "500px"
+coverHeight: "364px"
 ---
 
 # QR Code Error Correction for Programmers
@@ -106,7 +106,7 @@ Reed-Solomon uses a similar concept, but with a more nuanced approach - instead 
 Galois Fields, or Finite Fields as the more technical name, are a field of numbers with a limited set of numbers. They are referred to using $GF(n)$ where $n$ is some whole number.
 
 You might be familiar with several fields of numbers: 
- - $\mathbb{I}$ the field of integers: $-42, 7, 592, ...$
+ - $\mathbb{Z}$ the field of integers: $-42, 7, 592, ...$
  - $\mathbb{R}$ the field of real numbers: $3.1415, 0.00000001, -1234.5678, ...$
  - perhaps even $\mathbb{C}$ the field of complex numbers: $(2 + 3i), (-1 + 4i), (-7 -3i)$
 
